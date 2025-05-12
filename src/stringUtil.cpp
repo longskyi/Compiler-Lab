@@ -19,3 +19,18 @@ int string_test_main() {
     // 输出：你 好 ， 世 界 ！ 🌍
     return 0;
 }
+
+size_t u8len(const std::u8string & str) {
+    auto views = utf8_chars_view(str);
+    size_t ret = 0;
+    for(const auto & q : views) {
+        ret++;
+    }
+    return ret;
+}
+
+std::u8string head_u8char(const std::u8string & str) {
+    auto views = utf8_chars_view(str);
+    auto sview = *views.begin();
+    return std::u8string(sview);
+}

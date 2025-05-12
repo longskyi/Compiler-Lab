@@ -12,6 +12,7 @@ set(SOURCE
     ${CMAKE_CURRENT_LIST_DIR}/src/stringUtil.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/SyntaxType.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/grammarRead.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/parserGen.cpp
     )
 
 

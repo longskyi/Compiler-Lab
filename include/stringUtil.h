@@ -101,4 +101,8 @@ inline auto utf8_chars_view(const std::u8string& str) {
  */
 int string_test_main();
 
+size_t u8len(const std::u8string & str);
+
+std::u8string head_u8char(const std::u8string & str);
+
 #endif

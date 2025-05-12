@@ -1,0 +1,11 @@
+//ExprList -> Expr | ExprList , Expr
+//Expr -> i | d | d [ ExprList ] | d ( ExprList ) | Expr + Expr | Expr * Expr
+//Bool -> Expr r Expr | Expr && Expr
+//注释，此行忽略 真正的 | 为 \|
+
+
+
+表达式列表 -> 表达式 | 表达式列表 , 表达式
+表达式 -> i | d | d [ 表达式列表 ] | d ( 表达式列表 ) | 表达式 + 表达式 | 表达式 * 表达式
+布尔 -> 表达式 r 表达式 | 表达式 && 表达式
+//注释，此行忽略 真正的 | 为 \|
