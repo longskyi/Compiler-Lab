@@ -8,6 +8,8 @@
 //Expr -> i | d | d [ ExprList ] | d ( ExprList ) | Expr + Expr | Expr * Expr
 //Bool -> Expr r Expr | Expr && Expr
 //注释，此行忽略 真正的 | 为 \|
+//A -> B a | a    // 添加 A → a
+//B -> A b | b    // 添加 B → b
 Program -> DeclList StmtList
 DeclList -> epsilon | DeclList Decl ;
 Decl -> Type d | Type d [ i ] | Type d ( ArgList ) { DeclList StmtList }

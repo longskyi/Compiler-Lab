@@ -3,9 +3,27 @@
 //Bool -> Expr r Expr | Expr && Expr
 //注释，此行忽略 真正的 | 为 \|
 
-
+Program -> DeclList StmtList
+DeclList -> epsilon | DeclList Decl ;
+Decl -> Type d | Type d [ i ] | Type d ( ArgList ) { DeclList StmtList }
+Type -> int | void
+ArgList -> epsilon | ArgList Arg ;
+Arg -> Type d | d [ ] | Type d ( )
+StmtList -> Stmt | StmtList ; Stmt
+Stmt -> d = Expr | if ( Bool ) Stmt | if ( Bool ) Stmt else Stmt | while ( Bool ) Stmt | return Expr | { StmtList } | d ( ParamList )
+Bool -> Expr r Expr | Expr
+Expr -> d = Expr | i | d | d ( ParamList ) |  Expr + Expr | Expr * Expr | ( Expr ) 
+ParamList -> epsilon | ParamList Param ,
+Param -> Expr | d [ ] | d ( )
 
 表达式列表 -> 表达式 | 表达式列表 , 表达式
 表达式 -> i | d | d [ 表达式列表 ] | d ( 表达式列表 ) | 表达式 + 表达式 | 表达式 * 表达式
 布尔 -> 表达式 r 表达式 | 表达式 && 表达式
 //注释，此行忽略 真正的 | 为 \|
+
+
+S -> A
+A -> A b | b B a
+B -> a A c | a | a A b
+
+SLR1

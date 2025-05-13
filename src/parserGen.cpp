@@ -1,5 +1,6 @@
 #include"SyntaxType.h"
 #include"stringUtil.h"
+#include"templateUtil.h"
 #include"grammarRead.h"
 #include<variant>
 #include<cassert>
@@ -214,6 +215,7 @@ void generateClosure(const SymbolTable & symtab,const std::unordered_map<Product
         else {
             for(const auto & [pid,prodo] : Productions ) {
                 dotProdc dpi = {0,pid};
+                if(prodo.lhs() != prod.rhs()[state[i].dot_pos] ) continue;
                 if(!inState(dpi)) {
                     state.push_back(dpi);
                 }
@@ -224,8 +226,11 @@ void generateClosure(const SymbolTable & symtab,const std::unordered_map<Product
 
 /**
  * @brief 新状态生成
+ * @param symtab,Productions 符号表 产生式表
+ * @param curr_state 当前状态
+ * @param symbolId 符号id（包含终结符与非终结符）
  */
-std::vector<dotProdc> generateState(const SymbolTable & symtab ,const std::unordered_map<ProductionId,Production> & Productions,const std::vector<dotProdc> &curr_state, const SymbolId symbolId) {
+std::vector<dotProdc> generateState(const SymbolTable & symtab ,const std::unordered_map<ProductionId,Production> & Productions,const std::vector<dotProdc> &curr_state, const SymbolIdType auto symbolId) {
     std::vector<dotProdc> newState;
     for (auto & item : curr_state) {
         auto prod_it = Productions.find(item.producId);
@@ -239,6 +244,344 @@ std::vector<dotProdc> generateState(const SymbolTable & symtab ,const std::unord
     return newState;
 }
 
+/**
+ * @brief 检查新状态是否已存在于状态集合中（使用简单易用的朴素查重算法，O(n3)复杂度）
+ * @param states 现有的所有状态集合
+ * @param newState 待检查的新状态
+ * @return 若存在则返回对应状态的ID，否则返回-1
+ */
+std::optional<StateId> findExistingState(
+    const std::vector<std::vector<dotProdc>>& states,
+    const std::vector<dotProdc>& newState) 
+{
+    if (newState.empty()) return std::nullopt;
+
+    // 第一层遍历：所有现有状态
+    for (int existingId = 0; existingId < states.size(); ++existingId) {
+        const auto& existingState = states[existingId];
+        // 快速检查：状态大小不同则直接跳过
+        if (existingState.size() != newState.size()) continue;
+        bool isSame = true;
+        // 第二层遍历：比较每个dotProdc项
+        for (const auto& newItem : newState) {
+            bool foundItem = false;
+            // 第三层遍历：在现有状态中查找匹配项
+            for (const auto& existingItem : existingState) {
+                if (existingItem.producId == newItem.producId && 
+                    existingItem.dot_pos == newItem.dot_pos) {
+                    foundItem = true;
+                    break;
+                }
+            }
+            if (!foundItem) {
+                isSame = false;
+                break;
+            }
+        }
+        
+        if (isSame) {
+            return StateId(existingId); // 找到完全相同的状态
+        }
+    }
+    
+    return std::nullopt; // 未找到重复状态
+}
+
+// 修改后的状态生成逻辑，同时处理GOTO
+void processNewStateGOTO(
+    std::vector<std::vector<dotProdc>>& states,
+    std::vector<std::unordered_map<SymbolId, StateId>>& gotoTable,
+    const SymbolTable& symtab,
+    const std::unordered_map<ProductionId, Production>& Productions,
+    const std::vector<dotProdc>& newState,
+    const StateId curr_stateId,
+    const SymbolId curr_symId) 
+{
+    // 先查重
+    auto existingId = findExistingState(states, newState);
+
+    if (!existingId) {
+        // 新状态处理
+        StateId newId = StateId(states.size());
+        states.push_back(newState);
+        // 初始化对应的action和goto表项
+        gotoTable.emplace_back();
+        gotoTable.at(curr_stateId)[curr_symId] = newId;
+    } else {
+        gotoTable.at(curr_stateId)[curr_symId] = existingId.value();
+    }
+}
+
+/* 冲突类型定义 */
+enum ConflictType {
+    NO_CONFLICT,
+    SHIFT_REDUCE,
+    REDUCE_REDUCE
+};
+
+/**
+ * @brief SLR(1)冲突消解策略
+ * @return bool 是否成功消解冲突
+ * @note SLR(1)只能处理移进-规约冲突(优先移进)
+ */
+bool resolveSLRConflict(
+    const std::vector<std::vector<dotProdc>>& states,
+    std::vector<std::unordered_map<SymbolId, action>>& actionTable,
+    const SymbolTable& symtab,
+    const std::unordered_map<ProductionId, Production>& Productions,
+    StateId state,
+    SymbolId symbolid,
+    action exist,
+    action new_action,
+    ConflictType conflict_type) {
+    // SLR只能处理移进-规约冲突(优先移进)
+
+    auto visitor = overload {
+        [](ProductionId v) ->bool  { return false;},
+        [](StateId v) ->bool { return true;}
+    };
+
+    bool existing_is_shift = std::visit(visitor,exist);
+    bool new_is_shift = std::visit(visitor,new_action);
+
+    if (conflict_type == SHIFT_REDUCE) {
+        std::cerr << "SLR冲突消解: 选择移进优先" << std::endl;
+        // 无论哪种情况，都保留移进动作
+        if(existing_is_shift) {
+            // 现有是移进，保持不变
+            return true;
+        }
+        else if(new_is_shift) {
+            // 新动作是移进，覆盖现有规约
+            actionTable[state][symbolid] = new_action;
+            return true;
+        }
+    }
+    else {
+        std::cerr << "归约-归约冲突，未定义消解方案" << std::endl;
+    }
+    return false;
+}
+
+std::u8string formatProduction(const Production& prod, size_t dot_pos, const SymbolTable& symtab) {
+    std::u8string result;
+    result += u8"[";
+    result += symtab[prod.lhs()].sym();
+    result += u8" -> ";
+    
+    const auto& rhs = prod.rhs();
+    for (size_t i = 0; i < rhs.size(); ++i) {
+        if (i == dot_pos) {
+            result += u8"·";
+        }
+        result += symtab[rhs[i]].sym();
+        if (i != rhs.size() - 1) {
+            result += u8" ";
+        }
+    }
+    
+    // 处理点在最后的情况
+    if (dot_pos == rhs.size()) {
+        result += u8"·";
+    }
+    
+    result += u8"]";
+    return result;
+}
+
+/**
+ * @brief 报告冲突详细信息
+ */
+void reportConflict(
+    const std::vector<std::vector<dotProdc>>& states,
+    std::vector<std::unordered_map<SymbolId, action>>& actionTable,
+    const SymbolTable& symtab,
+    const std::unordered_map<ProductionId, Production>& Productions,
+    StateId state,
+    SymbolId symbolid,
+    action exist,
+    action new_action,
+    ConflictType conflict_type) {
+
+    std::cerr << "冲突: 状态 " << state << " 在符号 '" << toString(symtab[symbolid].sym()) << "' 上 ";
+    
+    auto visitor = overload {
+        [](ProductionId v) ->bool  { return false;},
+        [](StateId v) ->bool { return true;}
+    };
+
+    bool existing_is_shift = std::visit(visitor,exist);
+    bool new_is_shift = std::visit(visitor,new_action);
+
+    switch(conflict_type) {
+        case SHIFT_REDUCE:
+            std::cerr << "移进-规约冲突\n";
+            if (existing_is_shift) {
+                // 现有是移进，新的是规约
+                std::cerr << "  现有: 移进到状态 " << std::get<StateId>(exist) << "\n";
+                //printState(states[(existing_action - productions.size() - 1)],(existing_action - productions.size() - 1));
+                std::cerr << "  新动作: 规约产生式 " << std::get<ProductionId>(new_action) << " (";
+                std::cerr << toString(formatProduction(Productions.at(std::get<ProductionId>(new_action)),Productions.at(std::get<ProductionId>(new_action)).rhs().size(),symtab));
+                std::cerr << ")" << std::endl;
+            } else {
+                // 现有是规约，新的是移进
+                std::cerr << "  现有: 规约产生式 " << std::get<ProductionId>(exist) << " (";
+                std::cerr << toString(formatProduction(Productions.at(std::get<ProductionId>(exist)),Productions.at(std::get<ProductionId>(exist)).rhs().size(),symtab));
+                std::cerr << ")\n";
+                std::cerr << "  新动作: 移进到状态 " << std::get<StateId>(new_action) << "\n";
+                //printState(states[(new_action - productions.size() - 1)],(new_action - productions.size() - 1));
+            }
+            break;
+            
+        case REDUCE_REDUCE:
+            std::cerr << "规约-规约冲突\n";
+            std::cerr << "  现有: 规约产生式 " << std::get<ProductionId>(exist) << " (";
+            std::cerr << toString(formatProduction(Productions.at(std::get<ProductionId>(exist)),Productions.at(std::get<ProductionId>(exist)).rhs().size(),symtab));
+            std::cerr << ")\n";
+            std::cerr << "  新动作: 规约产生式 " << std::get<ProductionId>(new_action) << " (";
+                std::cerr << toString(formatProduction(Productions.at(std::get<ProductionId>(new_action)),Productions.at(std::get<ProductionId>(new_action)).rhs().size(),symtab));
+            std::cerr << ")" << std::endl;
+            break;
+        default:
+            break;
+    }
+}
+
+
+/**
+ * @brief 检查ACTION表冲突
+ * @return ConflictType 冲突类型
+ */
+ConflictType checkActionConflict(action exist , action new_action) {
+
+    auto visitor = overload {
+        [](ProductionId v) ->bool  { return false;},
+        [](StateId v) ->bool { return true;}
+    };
+
+    bool existing_is_shift = std::visit(visitor,exist);
+    bool new_is_shift = std::visit(visitor,new_action);
+
+    // 移进-规约冲突
+    if ((existing_is_shift && !new_is_shift) || (!existing_is_shift && new_is_shift)) {
+        return SHIFT_REDUCE;
+    }
+    // 规约-规约冲突
+    if (!existing_is_shift && !new_is_shift && exist != new_action) {
+        return REDUCE_REDUCE;
+    }
+    return NO_CONFLICT;
+}
+
+/**
+ * @brief 生成SLR(1)分析表
+ * @return bool 是否成功生成(无不可消解冲突)
+ */
+int generateSLRTable(
+    const std::vector<std::vector<dotProdc>>& states,
+    std::vector<std::unordered_map<SymbolId, action>>& actionTable,
+    const std::vector<std::unordered_map<SymbolId, StateId>>& gotoTable,
+    const SymbolTable& symtab,
+    const std::unordered_map<ProductionId, Production>& Productions,
+    const std::unordered_map<NonTerminalId, std::unordered_set<std::u8string>> & FOLLOW,
+    const NonTerminalId startId)
+{
+    assert(states.size() == gotoTable.size() );
+    actionTable.resize(states.size());
+    int conflicts_count = 0;
+
+    for (StateId state_i(0); state_i < states.size(); state_i=StateId(state_i+1))
+    {
+        for (auto & dotP : states[state_i])
+        {
+            const Production & prod = Productions.at(dotP.producId); 
+            // 可规约项目
+            if (dotP.dot_pos == prod.rhs().size())
+            {
+                // 接受动作
+                if (prod.lhs() == startId)
+                {
+                    if (actionTable[state_i].count(SymbolId(startId))) {
+                        std::cerr << "接受状态错误";
+                        conflicts_count += 1;
+                    }
+                    action accept = prod.index();
+                    actionTable[state_i][SymbolId(startId)] = accept;
+                    continue;
+                }
+                // 常规规约
+                for (const auto & follow_sym : FOLLOW.at(prod.lhs())) {
+                    auto symid_ = symtab.find_index(follow_sym);
+                    if(!symid_ || !symtab[symid_.value()].is_terminal()) {
+                        std::cerr<<"FOLLOW集出错";
+                    }
+                    auto termid = TerminalId(symid_.value());
+                    if (actionTable[state_i].count(SymbolId(termid))) {
+                        // 检查冲突
+                        action new_action = prod.index();
+                        ConflictType conflict = checkActionConflict(
+                            actionTable[state_i][SymbolId(termid)], new_action);
+                        if (conflict != NO_CONFLICT) {
+                            reportConflict(states,actionTable,symtab,Productions,state_i,SymbolId(termid),actionTable[state_i][SymbolId(termid)], new_action,conflict);
+                            conflicts_count += 1;
+                            // 尝试消解冲突
+                            if (!resolveSLRConflict(states,actionTable,symtab,Productions,state_i,SymbolId(termid),actionTable[state_i][SymbolId(termid)], new_action,conflict) ){
+                                continue;  // 无法消解，跳过设置
+                            } else {
+                                conflicts_count -= 1;
+                            }
+                        }
+                        else  {
+                            // 无冲突，正常进行归约
+                            actionTable[state_i][SymbolId(termid)] = new_action;
+                        }
+                    } else {
+                        // 正常进行规约
+                        actionTable[state_i][SymbolId(termid)] = prod.index();
+                    }
+                }
+                continue;
+            }
+
+            // 处理移进/转移项目
+            TerminalId termid = TerminalId(prod.rhs()[dotP.dot_pos]);
+            std::u8string sym = symtab[termid].sym();
+            if (symtab[termid].is_terminal()) {  // 终结符 - 移进
+                action shift_action = gotoTable[state_i].at(SymbolId(termid));
+                
+                // 检查冲突
+                if (actionTable[state_i].count(SymbolId(termid))) {
+                    // 检查冲突
+                    action new_action = shift_action;
+                    ConflictType conflict = checkActionConflict(
+                        actionTable[state_i][SymbolId(termid)], new_action);
+                    if (conflict != NO_CONFLICT) {
+                        reportConflict(states,actionTable,symtab,Productions,state_i,SymbolId(termid),actionTable[state_i][SymbolId(termid)], new_action,conflict);
+                        conflicts_count += 1;
+                        // 尝试消解冲突
+                        if (!resolveSLRConflict(states,actionTable,symtab,Productions,state_i,SymbolId(termid),actionTable[state_i][SymbolId(termid)], new_action,conflict) ){
+                            continue;  // 无法消解，跳过设置
+                        } else {
+                            conflicts_count -= 1;
+                        }
+                    }
+                    else  {
+                        // 无冲突，正常进行移进
+                        actionTable[state_i][SymbolId(termid)] = shift_action;
+                    }
+                } else {
+                    // 正常进行移进
+                    actionTable[state_i][SymbolId(termid)] = shift_action;
+                }
+            }
+        }
+    }
+    
+    return conflicts_count;
+}
+
+
+
 void parserGen_test_main() {
     namespace fs = std::filesystem;
     std::u8string char1;
@@ -249,8 +592,8 @@ void parserGen_test_main() {
 
     std::unordered_map<ProductionId,Production> Productions;
     std::vector<std::vector<dotProdc>> states; 
-    std::vector<std::unordered_map<std::u8string,action>> actionTable; 
-    std::vector<std::unordered_map<NonTerminalId,StateId>> gotoTable;
+    std::vector<std::unordered_map<SymbolId, action>> actionTable;
+    std::vector<std::unordered_map<SymbolId,StateId>> gotoTable;
     SymbolTable symtab;
 
     std::vector<Production> mproductions;
@@ -262,6 +605,12 @@ void parserGen_test_main() {
         std::cerr << "read grammar failed: " ;
         std::cerr << e.what() << '\n';
     }
+    symtab.add_symbol(u8"START",u8"START",u8"",false);
+    symtab.add_symbol(u8"$",u8"END",u8"",true);
+    //增广文法
+    auto pres = Production::create(symtab,u8"START",std::vector<std::u8string>{symtab[symtab.nonTerminals()[0]].sym()});
+    Productions.insert({pres.index(),pres});
+
     for(auto & prod : mproductions) {
         Productions.insert({ProductionId(prod.index()),prod});
     }
@@ -286,20 +635,40 @@ void parserGen_test_main() {
     }
 
     
-    // // Initiation
-    // states.front().push_back({ 0, 0 });
-    // generateClosure(states.front());
+    states.emplace_back(std::vector<dotProdc>{{0,pres.index()}});
+    generateClosure(symtab,Productions,states[0]);
+    gotoTable.emplace_back();
+    for(size_t i = 0 ; i < states.size() ; i++) {
+        std::unordered_set<SymbolId> symclosure;
+        for(auto & dprod : states[i] ) {
+            const auto & prod = Productions.at(dprod.producId);
+            if(dprod.dot_pos < prod.rhs().size()) {
+                symclosure.insert(prod.rhs().at(dprod.dot_pos));
+            }
+        }
+        for(auto & symid : symclosure) {
+            auto nSt = generateState(symtab,Productions,states[i],symid);
+            processNewStateGOTO(states, gotoTable, symtab, Productions , nSt , StateId(i),symid);
+        }
+    }
+    
+    std::cout<<"print STATE ---------------\n";
+    for(size_t i = 0; i < states.size(); i++) {
+        std::cout<<i<<": ";
+        for(auto p : states[i]) {
+            auto prod_it = Productions.find(p.producId);
+            if(prod_it == Productions.end()) {
+                std::cerr << "Invalid production ID in state";
+                continue;
+            }
+            const auto& prod = prod_it->second;
+            std::cout << toString(formatProduction(prod, p.dot_pos, symtab)) << " ";
+        }
+        std::cout<<std::endl;
+    }
 
-    // for (size_t i = 0; i < states.size(); ++i) {
-    //     for (size_t j = 0; j < states.at(i).size(); ++j) {
-    //         if (states.at(i).at(j).dot
-    //             >= productions.at(states.at(i).at(j).production).symbols.size())
-    //             continue;
-    //         generateState(
-    //             states.at(i),
-    //             productions.at(states.at(i).at(j).production).symbols.at(states.at(i).at(j).dot));
-    //     }
-    // }
+    bool success = generateSLRTable(states,actionTable,gotoTable,symtab,Productions,FOLLOW,NonTerminalId(symtab.find_index(u8"START").value()));
+    
 }
 
 

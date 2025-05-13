@@ -1,6 +1,6 @@
 #ifndef LCMP_SYNTAXTYPE_HEADER
 #define LCMP_SYNTAXTYPE_HEADER
-
+#include"templateUtil.h"
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -9,29 +9,6 @@
 #include <cstddef>
 #include <variant>
 
-template<typename Tag, typename T = size_t>
-struct StrongId {
-    T value;
-    
-    explicit constexpr StrongId(T v = {}) : value(v) {}
-    constexpr operator T() const { return value; }
-    
-    auto operator<=>(const StrongId&) const = default;
-    
-    friend std::ostream& operator<<(std::ostream& os, StrongId id) {
-        return os << id.value;
-    }
-};
-
-// 特化哈希
-namespace std {
-    template<typename Tag, typename T>
-    struct hash<StrongId<Tag, T>> {
-        size_t operator()(const StrongId<Tag, T>& id) const {
-            return hash<T>()(id.operator T());
-        }
-    };
-}
 
 using ProductionId = StrongId<struct ProductionTag>;
 using StateId = StrongId<struct StateTag>;

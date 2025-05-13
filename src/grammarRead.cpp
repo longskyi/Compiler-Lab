@@ -51,7 +51,7 @@ void readTerminals(SymbolTable& symtable, std::filesystem::path terminalPath) {
         std::string name = tokens[1];
         std::string pattern = (tokens.size() >= 3) ? tokens[2] : "";
 
-        symtable.add_symbol(tou8str(name), tou8str(type), tou8str(pattern), true);
+        symtable.add_symbol(toU8str(name), toU8str(type), toU8str(pattern), true);
     }
 }
 
@@ -96,7 +96,7 @@ void readProductionRule(SymbolTable& symtable, std::vector<Production>& producti
             trim(lhs);
 
             if (!lhs.empty()) {
-                nonTerminals.push_back(tou8str(lhs));
+                nonTerminals.push_back(toU8str(lhs));
             }
         }
     }
@@ -186,11 +186,11 @@ void readProductionRule(SymbolTable& symtable, std::vector<Production>& producti
                 if (symbol == "\\|") {
                     symbol = "|";
                 }
-                rhsSymbols.push_back(tou8str(symbol));
+                rhsSymbols.push_back(toU8str(symbol));
             }
             
             // Create the production
-            productions.push_back(Production::create(symtable, tou8str(lhs), rhsSymbols));
+            productions.push_back(Production::create(symtable, toU8str(lhs), rhsSymbols));
         }
     }
 }

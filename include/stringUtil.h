@@ -40,7 +40,7 @@ std::string toString(T str) {
 }
 
 template<typename T>
-std::u8string tou8str(T str) {
+std::u8string toU8str(T str) {
     return std::u8string(reinterpret_cast<const char8_t *>(str.c_str()));
 }
 
@@ -104,5 +104,7 @@ int string_test_main();
 size_t u8len(const std::u8string & str);
 
 std::u8string head_u8char(const std::u8string & str);
+
+std::u8string replace(const std::u8string& src, const std::u8string& pattern, const std::u8string& alt);
 
 #endif
