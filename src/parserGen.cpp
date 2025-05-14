@@ -1,7 +1,7 @@
 #include"SyntaxType.h"
 #include"stringUtil.h"
 #include"templateUtil.h"
-#include"grammarRead.h"
+#include"fileIO.h"
 #include<variant>
 #include<cassert>
 #include<iostream>

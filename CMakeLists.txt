@@ -8,10 +8,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
 set(SOURCE 
     ${CMAKE_CURRENT_LIST_DIR}/src/main.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/mylex.cpp
+    # ${CMAKE_CURRENT_LIST_DIR}/src/mylex.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/lexer.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/stringUtil.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/SyntaxType.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/grammarRead.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/fileIO.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/parserGen.cpp
     )
 

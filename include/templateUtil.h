@@ -39,5 +39,16 @@ namespace std {
     };
 }
 
+// 要求类型 T 可以被 std::hash 哈希
+template <typename T>
+concept Hashable = requires(T a) {
+    { std::hash<T>{}(a) } -> std::convertible_to<std::size_t>;
+};
+
+// 要求类型 T 支持 operator==
+template <typename T>
+concept EqualityComparable = requires(T a, T b) {
+    { a == b } -> std::convertible_to<bool>;
+};
 
 #endif

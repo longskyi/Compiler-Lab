@@ -11,7 +11,7 @@ ArgList -> epsilon | ArgList Arg ;
 Arg -> Type d | d [ ] | Type d ( )
 StmtList -> Stmt | StmtList ; Stmt
 Stmt -> d = Expr | if ( Bool ) Stmt | if ( Bool ) Stmt else Stmt | while ( Bool ) Stmt | return Expr | { StmtList } | d ( ParamList )
-Bool -> Expr r Expr | Expr
+Bool -> Expr <= Expr | Expr | Expr < Expr | Expr > Expr
 Expr -> d = Expr | i | d | d ( ParamList ) |  Expr + Expr | Expr * Expr | ( Expr ) 
 ParamList -> epsilon | ParamList Param ,
 Param -> Expr | d [ ] | d ( )
@@ -27,3 +27,11 @@ A -> A b | b B a
 B -> a A c | a | a A b
 
 SLR1
+
+
+实验4文法
+
+Stmt -> Expr
+Expr -> Expr + Tim | Tim
+Tim -> Tim * Far | Far
+Far -> ( Expr ) | i

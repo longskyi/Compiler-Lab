@@ -5,12 +5,33 @@
 #include<filesystem>
 #include"stringUtil.h"
 #include"SyntaxType.h"
-#include"grammarRead.h"
+#include"fileIO.h"
+#include"DFA.h"
+#include"lexer.h"
 #include"parserGen.h"
 namespace fs = std::filesystem;
 
 int main()
 {
+    //NFA_NS::test_regex_to_dfa();
+    std::string myprogram = R"(
+    int 原始(int 这是x;) {
+        这是y=这是x+5;
+        return 这是y};
+    void 嗨嗨嗨，你在干什么(int y;) {
+        int 𰻞;
+        void bar(int x; int soo();) {
+        if(x>3) bar(x/3,soo(),) else 𰻞 = soo(x);
+        print 𰻞};
+        bar(y,raw(),)};
+    foo(6,)
+    )";
+    auto ss = Lexer::scan(toU8str(myprogram));
+    for(auto q : ss) {
+        std::cout<<"["<<toString(q.type)<<","<<toString(q.value)<<"]";
+    }
+    return 0;
+    DFA_test_main();
     parserGen_test_main();
     return 0;
     fs::path curr_path = fs::current_path();
@@ -29,8 +50,8 @@ int main()
         return 0;
     }
 
-    auto r = symtab.symbols();
-    for(auto c : r) {
+    auto rs = symtab.symbols();
+    for(auto c : rs) {
         std::cout<<toString(c.sym())<<" "<<toString(c.pattern())<<" "<<std::endl;
     }
     for(auto q : productions) {

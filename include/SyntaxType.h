@@ -78,6 +78,7 @@ public:
         return symbols_[static_cast<SymbolId>(index)];
     }
     std::optional<SymbolId> find_index(const std::u8string& name) const;
+    //std::optional<SymbolId> find_index_type(const std::u8string& type) const;
     inline const auto & symbols() { return symbols_; }
     inline const auto & nonTerminals() const {return nonTerminalId;}
 };

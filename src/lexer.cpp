@@ -5,9 +5,46 @@
 #include<algorithm>
 #include<vector>
 #include<functional>
+#include"stringUtil.h"
+#include"lexer.h"
+
+namespace Lexer
+{
+
+bool LexerInit = false;
+
+using token = std::pair<std::string,std::string>;
+const std::vector<token> wordkey = 
+    {{"INT","int"},
+    {"VOID","void"},
+    {"IF","if"},
+    {"ELSE","else"},
+    {"WHILE","while"},
+    {"RETURN","return"},
+    {"PRINT","print"} };
+const std::vector<token> skey = 
+    {{"LBR","{"},
+    {"RBR","}"},
+    {"LPA","("},
+    {"RPA",")"},
+    {"SCO",";"},
+    {"CMA",","},
+    {"ADD","+"},
+    {"MUL","*"},
+    {"DIV","/"},
+    {"AND","&&"},
+    {"OR","||"},
+    {"ROP","<"},
+    {"ROP","<="},
+    {"ROP",">"},
+    {"ASG","="},
+    {"SKIP"," "},
+    {"SKIP","\n"},
+    {"SKIP","\r"},
+    {"SKIP","\t"} };
+
 
 using state = int;
-using token = std::pair<std::string,std::string>;
 #define mSTART 0
 #define mID 1
 #define mNUM 2
@@ -24,7 +61,7 @@ int move[120][256];
 int avai_node = 4;
 
 
-void insert_word_key(std::vector<token> keys)
+void insert_word_key(const std::vector<token> keys)
 {
     for(auto & key : keys)
     {
@@ -67,7 +104,7 @@ void insert_word_key(std::vector<token> keys)
     }
 }
 
-void insert_noWord_key(std::vector<token> keys)
+void insert_noWord_key(const std::vector<token> keys)
 {
     //插入非word类节点
     for(auto & key : keys)
@@ -169,16 +206,16 @@ void insert_flo()
     
 }
 
-typedef struct scanner_ret
+typedef struct mScanner_ret
 {
     std::string type;
     std::string value;
     size_t next_start;
-}scanner_ret;
+}mScanner_ret;
 
-scanner_ret scannerAgent(std::string & input , size_t start_index)
+mScanner_ret scannerAgent(const std::string & input , size_t start_index)
 {
-    scanner_ret ret;
+    mScanner_ret ret;
     if(start_index == input.size())
     {
         ret.type = "EOF";
@@ -217,47 +254,157 @@ scanner_ret scannerAgent(std::string & input , size_t start_index)
 
 }
 
-int main2()
+mScanner_ret scannerAgentU8(const std::u8string & u8input ,const std::string & input ,  size_t start_index)
 {
+    auto u8head = [](uint8_t ch) -> int {
+        int char_len;
+        if ((ch & 0x80) == 0x00) {        // 1-byte
+                char_len = 1;
+        } else if ((ch & 0xE0) == 0xC0) {  // 2-byte
+            char_len = 2;
+        } else if ((ch & 0xF0) == 0xE0) {  // 3-byte
+            char_len = 3;
+        } else if ((ch & 0xF8) == 0xF0) {  // 4-byte
+            char_len = 4;
+        } else {
+            std::cerr<<"Scanner Decode UTF8 ERROR";
+        }
+        return char_len;
+    };
+    mScanner_ret ret;
+    if(start_index == input.size())
+    {
+        ret.type = "EOF";
+        ret.value = "EOF";
+        return ret;
+    }
+    int lastloc = start_index-1; //上一个合法的字符末尾index（含）
+    size_t curr_index = start_index;
+    state curr_state = mSTART;
+    std::function<void(void)> scanner = [&u8head,&input,&start_index,&lastloc,&ret,&curr_index,&curr_state,&scanner] {
+        uint8_t ch = input[curr_index];
+        int char_len = u8head(ch);
+        if(char_len == 1)
+        {
+            //std::cout<<ch;
+            if(move[curr_state][ch] == -1) {
+                return;
+            }
+            //移动
+            curr_state = move[curr_state][ch];
+            if(nodes[curr_state].acce)
+            {
+                ret.type = nodes[curr_state].type;
+                ret.value = ret.value + input.substr(lastloc+1,curr_index - lastloc); //拼接字符串
+                lastloc = curr_index;
+            }
+            curr_index++;
+            scanner();
+            return;
+        }
+        else {
+            if(ret.value.empty()) {
+                //新进来U8符合 ID
+                ret.type = "ID";
+                ret.value = ret.value + input.substr(lastloc+1 ,curr_index + char_len-1 - lastloc);
+                curr_state = mID;
+                lastloc = curr_index + char_len - 1;
+            }
+            else {
+                char c = ret.value[0];
+                if(u8head(uint8_t(c)) > 1) 
+                {
+                    ret.type = "ID";
+                    ret.value = ret.value + input.substr(lastloc+1 ,curr_index + char_len -1  - lastloc);
+                    curr_state = mID;
+                    lastloc = curr_index + char_len - 1;
+                }
+                else if( ('a' <= c && c <= 'z' ) || ('A' <= c && c <= 'Z') ) {
+                    ret.type = "ID";
+                    ret.value = ret.value + input.substr(lastloc+1 ,curr_index + char_len -1 - lastloc);
+                    curr_state = mID;
+                    lastloc = curr_index + char_len - 1;
+                }
+                else {
+                    //非合法ID
+                    return;
+                }
+            }
+            curr_index += char_len; 
+            if(curr_index >= input.length()) return;
+            scanner();
+            return;
+        }
+        
+    };
+    scanner();
+    ret.next_start = lastloc+1;
+    if(lastloc < start_index)
+    {
+        //没有成功推进
+        ret.type="ERR";
+        ret.next_start = start_index+1;
+    }
+    return ret;
+
+}
+
+void init_Lexer() {
+
+    if(LexerInit) {
+        return;
+    }
     memset(move,-1,sizeof(move));
     for(int i = 0 ; i<60 ; i++)
     {
         nodes[i].acce = false;
         nodes[i].type = "";
     }
-    std::vector<token> wordkey = 
-    {{"INT","int"},
-    {"VOID","void"},
-    {"IF","if"},
-    {"ELSE","else"},
-    {"WHILE","while"},
-    {"RETURN","return"},
-    {"PRINT","print"} };
-    std::vector<token> skey = 
-    {{"LBR","{"},
-    {"RBR","}"},
-    {"LPA","("},
-    {"RPA",")"},
-    {"SCO",";"},
-    {"CMA",","},
-    {"ADD","+"},
-    {"MUL","*"},
-    {"DIV","/"},
-    {"AND","&&"},
-    {"OR","||"},
-    {"ROP","<"},
-    {"ROP","<="},
-    {"ROP",">"},
-    {"ASG","="},
-    {"SKIP"," "},
-    {"SKIP","\n"},
-    {"SKIP","\r"},
-    {"SKIP","\t"} };
+    
     insert_word_key(wordkey); //插入会跟ID有接触的
     insert_noWord_key(skey); //插入跟ID没关系的
     insert_id(); //id = [a-zA-Z][a-zA-Z0-9]*
     insert_num(); // num = [+-]?[0-9]+
     insert_flo(); // FLO = [+-]?[0-9]*.[0-9]+|[+-]?[0-9].[0-9]*
+    LexerInit = true;
+
+}
+
+
+std::vector<scannerToken_t> scan(const std::u8string & u8input) {
+    init_Lexer();
+    try
+    {
+        auto len = u8len(u8input); //非合法utf8编码出错会throw
+    }
+    catch(const std::exception& e)
+    {
+        std::cerr << e.what() << '\n';
+    }
+    
+    std::vector<scannerToken_t> ret;
+    size_t st = 0;
+    const std::string input = toString(u8input);
+    while(1)
+    {
+        auto lexret= scannerAgentU8(u8input,input,st);
+        if(lexret.type != "SKIP") {
+            ret.emplace_back(toU8str(lexret.type),toU8str(lexret.value));
+            //std::cout<<"("<<lexret.type<<",\""<<lexret.value<<"\")";
+        }   
+        if(lexret.type == "EOF") break;
+        st = lexret.next_start;
+    }
+    
+    return ret;
+}
+
+
+
+
+int test_main2()
+{
+    init_Lexer();
     std::string myprogram = R"(
     int raw(int x;) {
         y=x+5;
@@ -288,3 +435,7 @@ int main2()
     }
     return 0;   
 }
+
+} // namespace Lexer
+
+

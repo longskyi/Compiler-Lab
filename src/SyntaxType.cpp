@@ -22,6 +22,7 @@ std::optional<SymbolId> SymbolTable::find_index(const std::u8string& name) const
     return it != name_to_index_.end() ? std::optional(SymbolId(it->second)) : std::nullopt;
 }
 
+
 // Production implementation
 Production::Production(NonTerminalId lhs_index, std::vector<SymbolId> rhs_indices, size_t index)
     : lhs_index_(lhs_index), rhs_indices_(rhs_indices), index_(ProductionId(index)) {}
