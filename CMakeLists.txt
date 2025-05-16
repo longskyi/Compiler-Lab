@@ -21,6 +21,9 @@ add_executable(${PROJECT_NAME} ${SOURCE})
 target_include_directories(${PROJECT_NAME}
     PRIVATE    ${CMAKE_CURRENT_LIST_DIR}/include
 )
+target_include_directories(${PROJECT_NAME}
+    PRIVATE    ${CMAKE_CURRENT_LIST_DIR}/deps
+)
 set_target_properties(${PROJECT_NAME} PROPERTIES 
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/bin
     RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_CURRENT_LIST_DIR}/bin

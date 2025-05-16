@@ -1,5 +1,6 @@
 "INT","int"
 "VOID","void"
+"FLOAT","float"
 "IF","if"
 "ELSE","else"
 "WHILE","while"

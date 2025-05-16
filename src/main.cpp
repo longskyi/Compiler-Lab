@@ -9,28 +9,16 @@
 #include"DFA.h"
 #include"lexer.h"
 #include"parserGen.h"
+#include"AST/AST.h"
+#include"test.h"
 namespace fs = std::filesystem;
 
 int main()
 {
+    LCMPFileIO::test_main_strProd(fs::path(u8"c:/code/CPP/Compiler-Lab/grammar/SLR1ConflictReslove.txt"));
+    //return 0;
     //NFA_NS::test_regex_to_dfa();
-    std::string myprogram = R"(
-    int 原始(int 这是x;) {
-        这是y=这是x+5;
-        return 这是y};
-    void 嗨嗨嗨，你在干什么(int y;) {
-        int 𰻞;
-        void bar(int x; int soo();) {
-        if(x>3) bar(x/3,soo(),) else 𰻞 = soo(x);
-        print 𰻞};
-        bar(y,raw(),)};
-    foo(6,)
-    )";
-    auto ss = Lexer::scan(toU8str(myprogram));
-    for(auto q : ss) {
-        std::cout<<"["<<toString(q.type)<<","<<toString(q.value)<<"]";
-    }
-    return 0;
+    Lexer::test_main_u8();
     DFA_test_main();
     parserGen_test_main();
     return 0;

@@ -371,6 +371,10 @@ void init_Lexer() {
 }
 
 
+
+/**
+ * @attention 确保末尾加上[END,$]
+ */
 std::vector<scannerToken_t> scan(const std::u8string & u8input) {
     init_Lexer();
     try
@@ -395,11 +399,31 @@ std::vector<scannerToken_t> scan(const std::u8string & u8input) {
         if(lexret.type == "EOF") break;
         st = lexret.next_start;
     }
+    ret.push_back({u8"END",u8"$"});
     
     return ret;
 }
 
-
+int test_main_u8()
+{
+    std::string myprogram = R"(
+    int 原始(int 这是x;) {
+        这是y=这是x+5;
+        return 这是y};
+    void 嗨嗨嗨，你在干什么(int y;) {
+        int 𰻞;
+        void bar(int x; int soo();) {
+        if(x>3) bar(x/3,soo(),) else 𰻞 = soo(x);
+        print 𰻞};
+        bar(y,raw(),)};
+    foo(6,)
+    )";
+    auto ss = Lexer::scan(toU8str(myprogram));
+    for(auto q : ss) {
+        std::cout<<"["<<toString(q.type)<<","<<toString(q.value)<<"]";
+    }
+    return 0;
+}
 
 
 int test_main2()

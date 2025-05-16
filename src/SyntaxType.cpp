@@ -17,11 +17,23 @@ const Symbol& SymbolTable::add_symbol(std::u8string sym, std::u8string type,
 }
 
 
-std::optional<SymbolId> SymbolTable::find_index(const std::u8string& name) const {
-    auto it = name_to_index_.find(name);
+std::optional<SymbolId> SymbolTable::find_index(const std::u8string& sym) const {
+    auto it = name_to_index_.find(sym);
     return it != name_to_index_.end() ? std::optional(SymbolId(it->second)) : std::nullopt;
 }
 
+std::vector<SymbolId> SymbolTable::find_index_type(const std::u8string& type) const {
+    std::vector<SymbolId> ret;
+    for(const auto & sym : this->symbols_) {
+        if(sym.tokentype() == type)
+            ret.push_back(SymbolId(sym.index()));
+    }
+    return ret;
+}
+
+// SymbolId SymbolTable::tokenToId(Lexer::scannerToken_t token) const {
+
+// }
 
 // Production implementation
 Production::Production(NonTerminalId lhs_index, std::vector<SymbolId> rhs_indices, size_t index)
@@ -52,3 +64,21 @@ Production Production::create(const SymbolTable& symtab,
     return Production{NonTerminalId(*lhs_idx), std::move(rhs_indices), next_index_++};
 }
 
+
+bool equals(const U8StrProduction & strProd ,const Production & prod,const SymbolTable & symtab) {
+    if(strProd.rhs.size() != prod.rhs().size()) {
+        return false;
+    }
+    auto lhsS = symtab[prod.lhs()];
+    if(strProd.lhs != lhsS.sym()) {
+        return false;
+    }
+    for (size_t i = 0 ; i < strProd.rhs.size() ; i++ ) {
+        const auto & rhs = symtab[prod.rhs()[i]];
+        const auto & rhsSym = rhs.sym();
+        if(rhsSym != strProd.rhs[i]) {
+            return false;
+        }
+    }
+    return true;
+}

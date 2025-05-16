@@ -35,3 +35,41 @@ Stmt -> Expr
 Expr -> Expr + Tim | Tim
 Tim -> Tim * Far | Far
 Far -> ( Expr ) | i
+
+
+Program -> DeclList StmtList
+DeclList -> epsilon | DeclList Decl ;
+Decl -> Type d | Type d [ i ] | Type d ( ArgList ) { DeclList StmtList } | Decl [ i ]
+BaseType -> int | void 
+Type -> int | void | Type *
+ArgList -> epsilon | ArgList Arg ;
+Arg -> Type d | Type d [ ] | Type d ( )
+StmtList -> Stmt | StmtList ; Stmt
+Stmt -> d = Expr | if ( Bool ) Stmt | if ( Bool ) Stmt else Stmt | while ( Bool ) Stmt | return Expr | { DeclList StmtList } | d ( ParamList )
+Bool -> Expr <= Expr | Expr | Expr < Expr | Expr > Expr
+//Assignment -> | Expr            //最低优先级：赋值
+Expr       ->  d = Expr | Expr + Term | Term         //加法层
+Term       -> Term * Factor | Factor     //乘法层
+Factor     -> i | d | d ( ParamList ) | ( Expr ) | d [ i ]
+ParamList -> epsilon | ParamList Param ,
+Param -> Expr | d [ ] | d ( )
+
+
+
+
+实验2 文法
+
+
+Program -> DeclList StmtList
+DeclList -> epsilon | DeclList Decl ;
+Decl -> Type d | Type d [ i ] | Type d ( ArgList ) { DeclList StmtList }
+Type -> int | float | void
+ArgList -> epsilon | ArgList Arg ; 
+Arg -> Type d | Type d [ ] | Type d ( Type )
+StmtList -> Stmt | StmtList ; Stmt
+Stmt -> d = Expr | d [ Expr ] = Expr | if ( Bool ) Stmt | if ( Bool ) Stmt else Stmt | while ( Bool ) Stmt | return Expr | { StmtList } | d ( ParamList ) 
+//Stmt尾部存在问题,|右边少了东西
+Expr -> i | f | d | d [ Expr ] | Expr + Expr | Expr * Expr | ( Expr ) | d ( ParamList )
+Bool -> Expr r Expr | Expr
+ParamList -> epsilon | ParamList Param ,
+Param -> Expr | d [ ] | d ( )

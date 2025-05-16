@@ -51,4 +51,13 @@ concept EqualityComparable = requires(T a, T b) {
     { a == b } -> std::convertible_to<bool>;
 };
 
+
+//要求类型在Tuple里
+template <typename T, typename Tuple>
+concept IsInTuple = []() consteval {
+    return []<typename... Args>(std::tuple<Args...>) {
+        return (std::same_as<T, Args> || ...);
+    }(Tuple{});
+}();
+
 #endif

@@ -1,0 +1,7 @@
+//由于默认采用移进优先，以下定义的归约式碰到符号时，选择归约
+//格式 产生式 \ 终结符
+Expr -> Expr * Expr  \  +       //符号优先级
+Expr -> Expr * Expr  \  *       //符号优先级
+Expr -> Expr + Expr  \  +         //结合性
+Expr -> * Expr \ *              //左结合性
+Expr -> * Expr \ +

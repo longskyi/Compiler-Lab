@@ -329,6 +329,7 @@ bool resolveSLRConflict(
     std::vector<std::unordered_map<SymbolId, action>>& actionTable,
     const SymbolTable& symtab,
     const std::unordered_map<ProductionId, Production>& Productions,
+    const std::vector<ForceReducedProd> & forceReduceProd,
     StateId state,
     SymbolId symbolid,
     action exist,
@@ -345,15 +346,43 @@ bool resolveSLRConflict(
     bool new_is_shift = std::visit(visitor,new_action);
 
     if (conflict_type == SHIFT_REDUCE) {
-        std::cerr << "SLR冲突消解: 选择移进优先" << std::endl;
-        // 无论哪种情况，都保留移进动作
+        ProductionId checkId;
         if(existing_is_shift) {
+            checkId = std::get<ProductionId>(new_action);
+        }else if(new_is_shift) {
+            checkId = std::get<ProductionId>(exist);
+        }
+        else {
+            std::unreachable();
+        }
+        bool match = false;
+        for(const auto & rule : forceReduceProd) {
+            if(equals(rule.strProd,Productions.at(checkId),symtab)) {
+                if(rule.sym == symtab[symbolid].sym()) {
+                    match = true;
+                    break;
+                }
+            }
+        }
+        if(existing_is_shift) {
+            if(match) {
+                std::cerr << "匹配特殊SLR冲突消解规则: 选择归约优先" <<std::endl;
+                actionTable[state][symbolid] = std::get<ProductionId>(new_action); //多次一举，方便debug
+                return true;
+            }
             // 现有是移进，保持不变
+            std::cerr << "SLR冲突消解: 选择移进优先" << std::endl;
             return true;
         }
         else if(new_is_shift) {
+            if(match) {
+                std::cerr << "匹配特殊SLR冲突消解规则: 选择归约优先" <<std::endl;
+                //保持不变
+                return true;
+            }
             // 新动作是移进，覆盖现有规约
             actionTable[state][symbolid] = new_action;
+            std::cerr << "SLR冲突消解: 选择移进优先" << std::endl;
             return true;
         }
     }
@@ -483,6 +512,7 @@ int generateSLRTable(
     const std::vector<std::unordered_map<SymbolId, StateId>>& gotoTable,
     const SymbolTable& symtab,
     const std::unordered_map<ProductionId, Production>& Productions,
+    const std::vector<ForceReducedProd> & forceReduceProd,
     const std::unordered_map<NonTerminalId, std::unordered_set<std::u8string>> & FOLLOW,
     const NonTerminalId startId)
 {
@@ -525,7 +555,7 @@ int generateSLRTable(
                             reportConflict(states,actionTable,symtab,Productions,state_i,SymbolId(termid),actionTable[state_i][SymbolId(termid)], new_action,conflict);
                             conflicts_count += 1;
                             // 尝试消解冲突
-                            if (!resolveSLRConflict(states,actionTable,symtab,Productions,state_i,SymbolId(termid),actionTable[state_i][SymbolId(termid)], new_action,conflict) ){
+                            if (!resolveSLRConflict(states,actionTable,symtab,Productions,forceReduceProd,state_i,SymbolId(termid),actionTable[state_i][SymbolId(termid)], new_action,conflict) ){
                                 continue;  // 无法消解，跳过设置
                             } else {
                                 conflicts_count -= 1;
@@ -559,7 +589,7 @@ int generateSLRTable(
                         reportConflict(states,actionTable,symtab,Productions,state_i,SymbolId(termid),actionTable[state_i][SymbolId(termid)], new_action,conflict);
                         conflicts_count += 1;
                         // 尝试消解冲突
-                        if (!resolveSLRConflict(states,actionTable,symtab,Productions,state_i,SymbolId(termid),actionTable[state_i][SymbolId(termid)], new_action,conflict) ){
+                        if (!resolveSLRConflict(states,actionTable,symtab,Productions,forceReduceProd,state_i,SymbolId(termid),actionTable[state_i][SymbolId(termid)], new_action,conflict) ){
                             continue;  // 无法消解，跳过设置
                         } else {
                             conflicts_count -= 1;
@@ -666,8 +696,9 @@ void parserGen_test_main() {
         }
         std::cout<<std::endl;
     }
-
-    bool success = generateSLRTable(states,actionTable,gotoTable,symtab,Productions,FOLLOW,NonTerminalId(symtab.find_index(u8"START").value()));
+    std::vector<ForceReducedProd> forceReducedProd;
+    forceReducedProd = LCMPFileIO::parseProdFileR("C:/code/CPP/Compiler-Lab/grammar/SLR1ConflictReslove.txt");
+    bool success = generateSLRTable(states,actionTable,gotoTable,symtab,Productions,forceReducedProd,FOLLOW,NonTerminalId(symtab.find_index(u8"START").value()));
     
 }
 

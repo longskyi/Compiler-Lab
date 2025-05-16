@@ -1,6 +1,5 @@
 #ifndef LCMP_SYNTAXTYPE_HEADER
 #define LCMP_SYNTAXTYPE_HEADER
-#include"templateUtil.h"
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -8,7 +7,13 @@
 #include <stdexcept>
 #include <cstddef>
 #include <variant>
+#include <json.hpp>
+#include"templateUtil.h"
+#include"lexer.h"
 
+namespace LCMPFileIO{
+    class JsonConverter;
+}
 
 using ProductionId = StrongId<struct ProductionTag>;
 using StateId = StrongId<struct StateTag>;
@@ -32,11 +37,22 @@ struct dotProdc
     ProductionId producId;
 };
 
+struct U8StrProduction {
+    std::u8string lhs;
+    std::vector<std::u8string> rhs;
+};
+
+struct ForceReducedProd {
+    U8StrProduction strProd;
+    std::u8string sym;
+};
+
 
 class SymbolTable;
 
 class Symbol {
 friend class SymbolTable;
+friend class LCMPFileIO::JsonConverter; 
 private:
     std::u8string sym_;
     std::u8string tokentype_;
@@ -51,17 +67,19 @@ private:
       index_(index) {}
 
 public:
+
     Symbol(const Symbol&) = default;
     Symbol& operator=(const Symbol&) = default;
 
-    inline const std::u8string& sym() const { return sym_; }
-    inline const std::u8string& tokentype() const { return tokentype_; }
-    inline const std::u8string& pattern() const { return pattern_; }
+    inline const std::u8string& sym() const { return sym_; } //"i"
+    inline const std::u8string& tokentype() const { return tokentype_; } //"ID"
+    inline const std::u8string& pattern() const { return pattern_; } //"[a-Z]"
     inline bool is_terminal() const { return isTerminal_; }
     inline size_t index() const { return index_; }
 };
 
 class SymbolTable {
+friend class LCMPFileIO::JsonConverter;
 private:
     std::vector<Symbol> symbols_;
     std::vector<NonTerminalId>nonTerminalId;
@@ -77,7 +95,9 @@ public:
         }
         return symbols_[static_cast<SymbolId>(index)];
     }
-    std::optional<SymbolId> find_index(const std::u8string& name) const;
+    std::optional<SymbolId> find_index(const std::u8string& sym) const;
+    std::vector<SymbolId> find_index_type(const std::u8string& type) const;
+    //SymbolId tokenToId(Lexer::scannerToken_t token) const;
     //std::optional<SymbolId> find_index_type(const std::u8string& type) const;
     inline const auto & symbols() { return symbols_; }
     inline const auto & nonTerminals() const {return nonTerminalId;}
@@ -85,6 +105,7 @@ public:
 
 
 class Production {
+friend class LCMPFileIO::JsonConverter; 
 private:
     NonTerminalId lhs_index_;
     std::vector<SymbolId> rhs_indices_;
@@ -107,5 +128,7 @@ public:
     inline const std::vector<SymbolId>& rhs() const { return rhs_indices_; }
     inline ProductionId index() const { return index_; }
 };
+
+bool equals(const U8StrProduction & strProd ,const Production & prod,const SymbolTable & symtab);
 
 #endif // SYNTAXTYPE_HEADER
