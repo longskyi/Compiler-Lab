@@ -1,13 +1,13 @@
 Program -> DeclList StmtList  
 DeclList -> epsilon | DeclList Decl ;  
-Decl -> Type d | Type d [ i ] | Type d ( ArgList ) { DeclList StmtList }  
+Decl -> Type id | Type id [ num ] | Type id ( ArgList ) { DeclList StmtList }  
 Type -> BaseType | BaseType *  
 BaseType -> int | float | void  
 ArgList -> epsilon | ArgList Arg ;  
-Arg -> Type d | Type d [ ] | Type d ( Type )  
-StmtList -> Stmt | StmtList ; Stmt  
-Stmt -> d = Expr | d [ Expr ] = Expr | if ( Bool ) Stmt | if ( Bool ) Stmt else Stmt | while ( Bool ) Stmt | return Expr | { StmtList } | d ( ParamList )  
-Expr -> i | f | d | d [ Expr ] | * Expr | Expr + Expr | Expr * Expr | ( Expr ) | d ( ParamList )  
-Bool -> Expr r Expr | Expr  
+Arg -> Type id | Type id [ ] | Type id ( Type )  
+StmtList -> epsilon | Stmt | StmtList ; Stmt  
+Stmt -> id = Expr | id [ Expr ] = Expr | if ( Bool ) Stmt | if ( Bool ) Stmt else Stmt | while ( Bool ) Stmt | return Expr | { StmtList } | id ( ParamList )  
+Expr -> num | flo | id | id [ Expr ] | * Expr | Expr + Expr | Expr * Expr | ( Expr ) | id ( ParamList )  
+Bool -> Expr rop Expr | Expr  
 ParamList -> epsilon | ParamList Param ,  
-Param -> Expr | d [ ] | d ( )
+Param -> Expr | id [ ] | id ( )

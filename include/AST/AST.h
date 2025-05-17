@@ -7,6 +7,7 @@
 #include "templateUtil.h"
 #include "SyntaxType.h"
 #include "lexer.h"
+#include"parserGen.h"
 
 namespace AST
 {
@@ -24,17 +25,28 @@ enum class ASTType {
 enum class ASTSubType {
     SubCommon
 };
+
+class ASTVisitor;
+
 class ASTNode
 {
 public:
     ASTType Ntype;
     ASTSubType subType;
+    virtual void accept(ASTVisitor& visitor) = 0; 
     ASTNode() {
         Ntype = ASTType::Common;
         subType = ASTSubType::SubCommon;
-    }
+    } 
     virtual ~ASTNode() = default;
 };
+
+
+class ASTVisitor {
+public:
+    virtual void visit(ASTNode* node) = 0;
+};
+
 
 class ASTCommonNode : public ASTNode
 {
@@ -42,18 +54,31 @@ public:
     bool isLeaf() {
         return childs.size() == 0;
     }
+    void accept(ASTVisitor & visitor) override {
+        //前序遍历
+        visitor.visit(this);
+        for(auto & kid : childs) {
+            kid->accept(visitor);
+        }
+        return;
+    }
     u8string type; //原始类型-非终结符
     u8string value;
     std::vector<unique_ptr<ASTNode>> childs;
 };
 
-typedef struct ASTbaseContent {
-    std::vector<std::vector<dotProdc>> states;
-    std::vector<std::unordered_map<SymbolId, StateId>> gotoTable;
-    std::vector<std::unordered_map<SymbolId, action>> actionTable;
-    SymbolTable symtab;
-    std::unordered_map<ProductionId, Production> Productions;
-}ASTbaseContent;
+class mVisitor : public ASTVisitor {
+    void visit(ASTNode * node) override {
+        if(dynamic_cast<ASTCommonNode*>(node)) {
+            this->visit(static_cast<ASTCommonNode*>(node));
+        }
+        return;
+    }
+    void visit(ASTCommonNode * node) {
+        std::cerr << toString(node->value)<<" ";
+        return;
+    }
+};
 
 class AbstractSyntaxTree {
 public:
@@ -63,6 +88,7 @@ public:
     const std::vector<std::unordered_map<SymbolId, action>> actionTable;
     const SymbolTable symtab;
     const std::unordered_map<ProductionId, Production> Productions;
+    AbstractSyntaxTree() = delete;
     AbstractSyntaxTree(ASTbaseContent inp)
      : states(std::move(inp.states)),gotoTable(std::move(inp.gotoTable)), actionTable(std::move(inp.actionTable)), symtab(std::move(inp.symtab)), Productions(std::move(inp.Productions))
     {
@@ -82,26 +108,43 @@ public:
             auto token = tokens[token_i];
             SymbolId tokenSymId;
             //获取token对应symbolId
-            if(token.type == u8"ID" || token.type == u8"NUM" || token.type == u8"FLO") {
-                auto Ids = symtab.find_index_type(token.type);
-                if(Ids.size()!=1) {
-                    throw std::runtime_error("文法内部错误，ID NUM FLO 解析错误");
-                }
-                tokenSymId = Ids[0];
+            auto Ids = symtab.find_index_type(token.type);
+            if(Ids.size()!=1) {
+                std::cerr<<"文法内部冲突, token type:"<< toString(token.type) <<" - symbolId解析错误";
+                throw std::runtime_error("文法内部冲突, type 解析错误");
             }
-            else {
-
-                auto opn = symtab.find_index(token.value);
-                if(opn) {
-                    tokenSymId = opn.value();
+            tokenSymId = Ids[0];
+            
+            action now_action;
+            if(! actionTable[StateStack.top()].count(tokenSymId)) {
+                for(auto p : states[StateStack.top()]) {
+                    auto prod_it = Productions.find(p.producId);
+                    if(prod_it == Productions.end()) {
+                        std::cerr << "Invalid production ID in state";
+                        continue;
+                    }
+                    const auto& prod = prod_it->second;
+                    std::cout << toString(formatProduction(prod, p.dot_pos, symtab)) << " ";
                 }
-                else {
-                    std::cerr<<"构建通用AST失败";
-                    return false;
+                std::cout<<std::endl;
+                
+                std::cerr << "unexpected token :" << toString(symtab[tokenSymId].sym()) << " atPos: " << token_i << "\n";
+                std::vector<std::u8string> expectedSym;
+                for(const auto & s : actionTable[StateStack.top()]) {
+                    if(symtab[s.first].is_terminal()) {
+                        expectedSym.push_back(symtab[s.first].sym());
+                    }
                 }
+                std::cerr << " Expected token:[";
+                for(const auto & s : expectedSym ) {
+                    std::cerr <<"\"" <<toString(s) <<"\",";
+                }
+                std::cerr <<"]"<<std::endl;
+                return false;
             }
-            action now_action = actionTable[StateStack.top()].at(tokenSymId);
-
+        
+            now_action = actionTable[StateStack.top()].at(tokenSymId);
+        
             auto action_Visitor = overload {
                 [](StateId v) -> bool {return true;},
                 [](ProductionId v) -> bool {return false;}
@@ -120,10 +163,14 @@ public:
             }
             else {
                 //归约
+                if(! Productions.count(std::get<ProductionId>(now_action))) {
+                    std::cerr << "unable to find Production with id :" <<std::get<ProductionId>(now_action);
+                    return false;
+                }
                 auto prod = Productions.at(std::get<ProductionId>(now_action));
                 size_t popsize = prod.rhs().size();
                 ASTCommonNode nt;
-                nt.type = symtab[prod.lhs()].tokentype();
+                nt.type = symtab[prod.lhs()].sym();
                 nt.value = u8"";
                 std::vector<unique_ptr<ASTNode>> ntchilds;
                 for(int i=0;i<popsize;i++) {
@@ -136,13 +183,24 @@ public:
                 }
                 symStack.emplace(std::make_unique<ASTCommonNode>(std::move(nt)));
                 //查表当前归约非终结符后的下一个状态
+                if(! gotoTable[StateStack.top()].count(SymbolId(prod.lhs()) )) {
+                    if(symtab[prod.lhs()].sym() == u8"START") {
+                        root = std::move(symStack.top());
+                        symStack.pop();
+                        return true;
+                    }
+                    std::cerr << "AST构建内部错误 , goto表找不到对应非终结符转移规则" ;
+                    return false;
+                }
                 auto nextState = gotoTable[StateStack.top()].at(SymbolId(prod.lhs()));
                 StateStack.push(nextState);
                 //不移进
             }
         }
-        root = std::move(symStack.top());
-        symStack.pop();
+        std::unreachable();
+        // root = std::move(symStack.top());
+        // symStack.pop();
+        // return true;
     }
     virtual ~AbstractSyntaxTree() = default;
 };
@@ -151,9 +209,63 @@ public:
 
 
 
-
+void printCommonAST(const unique_ptr<ASTNode>& node, int depth = 0) {
+    // Check if node is ASTCommonNode using dynamic_cast
+    if (auto commonNode = dynamic_cast<ASTCommonNode*>(node.get())) {
+        // Print indentation based on depth
+        for (int i = 0; i < depth; ++i) {
+            std::cout << "  ";
+        }
+        
+        // Print node type and value
+        std::cout << "Type: " << std::string(commonNode->type.begin(), commonNode->type.end())
+                  << ", Value: " << std::string(commonNode->value.begin(), commonNode->value.end())
+                  << std::endl;
+        
+        // Recursively print children with increased depth
+        for (const auto& child : commonNode->childs) {
+            printCommonAST(child, depth + 1);
+        }
+    } else {
+        // Print message for non-common nodes
+        for (int i = 0; i < depth; ++i) {
+            std::cout << "  ";
+        }
+        std::cout << "非通用结点，跳过" << std::endl;
+    }
+}
 
 void test_main() {
+
+    auto astbase = parserGen(
+        u8"C:/code/CPP/Compiler-Lab/grammar/grammar.txt",
+        u8"C:/code/CPP/Compiler-Lab/grammar/terminal.txt",
+        u8"C:/code/CPP/Compiler-Lab/grammar/SLR1ConflictReslove.txt"
+    );
+    AST::AbstractSyntaxTree astT(astbase);
+    std::string myprogram = R"(
+    int acc() {
+    int a;
+    int b;
+    a = 10;
+    b = 20;
+    if (a < b) {
+        return 1
+    };
+    return 0 
+};
+    )";
+    auto ss = Lexer::scan(toU8str(myprogram));
+    for(int i= 0 ;i < ss.size() ; i++) {
+        auto q = ss[i];
+        std::cout<<"["<<toString(q.type)<<" "<<toString(q.value)<<" "<<i<<"]";
+    }
+    std::cout<<"\n";
+    astT.BuildCommonAST(ss);
+    printCommonAST(astT.root);
+    mVisitor v;
+    astT.root->accept(v);
+    return;
     
 }
 

@@ -105,7 +105,7 @@ void readProductionRule(SymbolTable& symtable, std::vector<Production>& producti
     // Add non-terminals to symbol table (if not already exists)
     for (const auto& nt : nonTerminals) {
         try {
-            symtable.add_symbol(nt, u8"", u8"", false);
+            symtable.add_symbol(nt, nt , u8"", false);
         } catch (const std::runtime_error&) {
             // Symbol already exists, skip
         }

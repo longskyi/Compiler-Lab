@@ -15,8 +15,9 @@ namespace fs = std::filesystem;
 
 int main()
 {
-    LCMPFileIO::test_main_strProd(fs::path(u8"c:/code/CPP/Compiler-Lab/grammar/SLR1ConflictReslove.txt"));
-    //return 0;
+    //LCMPFileIO::test_main_strProd(fs::path(u8"c:/code/CPP/Compiler-Lab/grammar/SLR1ConflictReslove.txt"));
+    AST::test_main();
+    return 0;
     //NFA_NS::test_regex_to_dfa();
     Lexer::test_main_u8();
     DFA_test_main();

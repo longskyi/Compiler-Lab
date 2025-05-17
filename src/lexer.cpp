@@ -16,6 +16,7 @@ bool LexerInit = false;
 using token = std::pair<std::string,std::string>;
 const std::vector<token> wordkey = 
     {{"INT","int"},
+    {"FLOAT","float"},
     {"VOID","void"},
     {"IF","if"},
     {"ELSE","else"},
@@ -392,7 +393,7 @@ std::vector<scannerToken_t> scan(const std::u8string & u8input) {
     while(1)
     {
         auto lexret= scannerAgentU8(u8input,input,st);
-        if(lexret.type != "SKIP") {
+        if(lexret.type != "SKIP" && lexret.type != "EOF" ) {
             ret.emplace_back(toU8str(lexret.type),toU8str(lexret.value));
             //std::cout<<"("<<lexret.type<<",\""<<lexret.value<<"\")";
         }   

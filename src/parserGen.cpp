@@ -7,6 +7,7 @@
 #include<iostream>
 #include<unordered_set>
 #include<filesystem>
+#include"parserGen.h"
 
 const std::u8string epsilon = u8"ε"; // 显式定义ε
 
@@ -536,7 +537,7 @@ int generateSLRTable(
                         conflicts_count += 1;
                     }
                     action accept = prod.index();
-                    actionTable[state_i][SymbolId(startId)] = accept;
+                    actionTable[state_i][symtab.find_index(u8"$").value()] = accept;
                     continue;
                 }
                 // 常规规约
@@ -703,3 +704,76 @@ void parserGen_test_main() {
 }
 
 
+ASTbaseContent parserGen(std::filesystem::path grammarFile , std::filesystem::path terminalsFile , std::filesystem::path SLRruleFile) {
+    ASTbaseContent ret;
+
+    std::unordered_map<ProductionId,Production> Productions;
+    std::vector<std::vector<dotProdc>> states; 
+    std::vector<std::unordered_map<SymbolId, action>> actionTable;
+    std::vector<std::unordered_map<SymbolId,StateId>> gotoTable;
+    SymbolTable symtab;
+
+    std::vector<Production> mproductions;
+    try {
+        readTerminals(symtab,terminalsFile);
+        readProductionRule(symtab,mproductions,grammarFile);
+    }
+    catch(const std::exception& e) {
+        std::cerr << "read grammar failed: " ;
+        std::cerr << e.what() << '\n';
+    }
+    symtab.add_symbol(u8"START",u8"START",u8"",false);
+    symtab.add_symbol(u8"$",u8"END",u8"",true);
+    //增广文法
+    auto pres = Production::create(symtab,u8"START",std::vector<std::u8string>{symtab[symtab.nonTerminals()[0]].sym()});
+    Productions.insert({pres.index(),pres});
+    for(auto & prod : mproductions) {
+        Productions.insert({ProductionId(prod.index()),prod});
+    }
+    auto FIRST = computeFirst(symtab,Productions);
+    auto FOLLOW = computeFollow(symtab,Productions,FIRST,symtab.nonTerminals().front());
+
+    states.emplace_back(std::vector<dotProdc>{{0,pres.index()}});
+    generateClosure(symtab,Productions,states[0]);
+    gotoTable.emplace_back();
+    for(size_t i = 0 ; i < states.size() ; i++) {
+        std::unordered_set<SymbolId> symclosure;
+        for(auto & dprod : states[i] ) {
+            const auto & prod = Productions.at(dprod.producId);
+            if(dprod.dot_pos < prod.rhs().size()) {
+                symclosure.insert(prod.rhs().at(dprod.dot_pos));
+            }
+        }
+        for(auto & symid : symclosure) {
+            auto nSt = generateState(symtab,Productions,states[i],symid);
+            processNewStateGOTO(states, gotoTable, symtab, Productions , nSt , StateId(i),symid);
+        }
+    }
+
+    std::vector<ForceReducedProd> forceReducedProd;
+    forceReducedProd = LCMPFileIO::parseProdFileR(SLRruleFile);
+    bool success = generateSLRTable(states,actionTable,gotoTable,symtab,Productions,forceReducedProd,FOLLOW,NonTerminalId(symtab.find_index(u8"START").value()));
+
+
+    std::cout<<"print STATE ---------------\n";
+    for(size_t i = 0; i < states.size(); i++) {
+        std::cout<<i<<": ";
+        for(auto p : states[i]) {
+            auto prod_it = Productions.find(p.producId);
+            if(prod_it == Productions.end()) {
+                std::cerr << "Invalid production ID in state";
+                continue;
+            }
+            const auto& prod = prod_it->second;
+            std::cout << toString(formatProduction(prod, p.dot_pos, symtab)) << " ";
+        }
+        std::cout<<std::endl;
+    }
+
+    ret.actionTable = actionTable;
+    ret.gotoTable = gotoTable;
+    ret.Productions = Productions;
+    ret.states = states;
+    ret.symtab = symtab;    
+    return ret;
+}
