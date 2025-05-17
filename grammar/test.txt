@@ -1,0 +1,148 @@
+Type: START, Value:
+  Type: Program, Value:
+    Type: DeclList, Value:
+      Type: DeclList, Value:
+      Type: Decl, Value:
+        Type: Type, Value:
+          Type: BaseType, Value:
+            Type: INT, Value: int
+        Type: ID, Value: acc
+        Type: LPA, Value: (
+        Type: ArgList, Value:
+        Type: RPA, Value: )
+        Type: LBR, Value: {
+        Type: DeclList, Value:
+          Type: DeclList, Value: 
+            Type: DeclList, Value:
+            Type: Decl, Value:
+              Type: Type, Value:
+                Type: BaseType, Value:
+                  Type: INT, Value: int
+              Type: ID, Value: a
+            Type: SCO, Value: ;
+          Type: Decl, Value:
+            Type: Type, Value:
+              Type: BaseType, Value:
+                Type: INT, Value: int
+            Type: ID, Value: b
+          Type: SCO, Value: ;
+        Type: StmtList, Value:
+          Type: StmtList, Value:
+            Type: StmtList, Value:
+              Type: StmtList, Value:
+                Type: Stmt, Value:
+                  Type: ID, Value: a
+                  Type: ASG, Value: =
+                  Type: Expr, Value:
+                    Type: NUM, Value: 10
+              Type: SCO, Value: ;
+              Type: Stmt, Value:
+                Type: ID, Value: b
+                Type: ASG, Value: =
+                Type: Expr, Value:
+                  Type: NUM, Value: 20
+            Type: SCO, Value: ;
+            Type: Stmt, Value:
+              Type: IF, Value: if
+              Type: LPA, Value: (
+              Type: Bool, Value:
+                Type: Expr, Value:
+                  Type: ID, Value: a
+                Type: ROP, Value: <
+                Type: Expr, Value:
+                  Type: ID, Value: b
+              Type: RPA, Value: )
+              Type: Stmt, Value:
+                Type: LBR, Value: {
+                Type: StmtList, Value:
+                  Type: Stmt, Value:
+                    Type: RETURN, Value: return
+                    Type: Expr, Value:
+                      Type: NUM, Value: 1
+                Type: RBR, Value: }
+          Type: SCO, Value: ;
+          Type: Stmt, Value:
+            Type: RETURN, Value: return
+            Type: Expr, Value:
+              Type: NUM, Value: 0
+        Type: RBR, Value: }
+      Type: SCO, Value: ;
+    Type: StmtList, Value:
+       int acc (  ) {       int a ;    int b ;      a =  10 ;  b =  20 ;  if (   a <  b )  {   return  1 } ;  return  0 } ;
+
+
+
+
+Type: START, Value:
+  Type: Program, Value:
+    Type: DeclList, Value:
+      Type: DeclList, Value:
+      Type: Decl, Value:
+        Type: Type, Value:
+          Type: BaseType, Value:
+            Type: INT, Value: int
+        Type: ID, Value: acc
+        Type: LPA, Value: (
+        Type: ArgList, Value:
+        Type: RPA, Value: )
+        Type: LBR, Value: {
+        Type: DeclList, Value:
+          Type: DeclList, Value:
+            Type: DeclList, Value:
+            Type: Decl, Value:
+              Type: Type, Value:
+                Type: BaseType, Value:
+                  Type: INT, Value: int
+              Type: ID, Value: a
+            Type: SCO, Value: ;
+          Type: Decl, Value:
+            Type: Type, Value:
+              Type: BaseType, Value:
+                Type: INT, Value: int
+            Type: ID, Value: b
+          Type: SCO, Value: ;
+        Type: StmtList, Value:
+          Type: StmtList, Value:
+            Type: StmtList, Value:
+              Type: StmtList, Value:
+                Type: Stmt, Value:
+                  Type: ID, Value: a
+                  Type: ASG, Value: =
+                  Type: Expr, Value:
+                    Type: NUM, Value: 10
+              Type: SCO, Value: ;
+              Type: Stmt, Value:
+                Type: ID, Value: b
+                Type: ASG, Value: =
+                Type: Expr, Value:
+                  Type: NUM, Value: 20
+            Type: SCO, Value: ;
+            Type: Stmt, Value:
+              Type: IF, Value: if
+              Type: LPA, Value: (
+              Type: Bool, Value:
+                Type: Expr, Value:
+                  Type: ID, Value: a
+                Type: ROP, Value: <
+                Type: Expr, Value:
+                  Type: ID, Value: b
+              Type: RPA, Value: )
+              Type: Stmt, Value:
+                Type: LBR, Value: {
+                Type: StmtList, Value:
+                  Type: Stmt, Value:
+                    Type: RETURN, Value: return
+                    Type: Expr, Value:
+                      Type: NUM, Value: 1
+                Type: RBR, Value: }
+          Type: SCO, Value: ;
+          Type: Stmt, Value:
+            Type: RETURN, Value: return
+            Type: Expr, Value:
+              Type: NUM, Value: 0
+        Type: RBR, Value: }
+      Type: SCO, Value: ;
+    Type: StmtList, Value:
+       int acc (  ) {       int a ;    int b ;      a =  10 ;  b =  20 ;  if (   a <  b )  {   return  1 } ;  return  0 } ;
+
+比较两次输出异同
