@@ -1,13 +1,20 @@
-Program -> DeclList StmtList  
-DeclList -> epsilon | DeclList Decl ;  
-Decl -> Type id | Type id [ num ] | Type id ( ArgList ) { DeclList StmtList }  
+Program -> DeclList 
+DeclList -> epsilon | DeclList Decl
+Block -> { BlockItemList }  
+BlockItemList -> epsilon | BlockItemList BlockItem
+BlockItem -> Decl | Stmt
 Type -> BaseType | BaseType *  
 BaseType -> int | float | void  
-ArgList -> epsilon | ArgList Arg ;  
-Arg -> Type id | Type id [ ] | Type id ( Type )  
-StmtList -> epsilon | Stmt | StmtList ; Stmt  
-Stmt -> id = Expr | id [ Expr ] = Expr | if ( Bool ) Stmt | if ( Bool ) Stmt else Stmt | while ( Bool ) Stmt | return Expr | { StmtList } | id ( ParamList )  
-Expr -> num | flo | id | id [ Expr ] | * Expr | Expr + Expr | Expr * Expr | ( Expr ) | id ( ParamList )  
+Decl -> Type id ;| Type id = Expr ; | Type id [ num ] ; | Type id ( ArgList ) Block
+ArgList -> epsilon | Arg ; ArgList
+Arg -> Type id | Type id [ ] | Type id ( Type )  //声明函数指针时，使用的，仅支持传入单变量（含void）函数指针
+Stmt -> id = Expr ; | id [ Expr ] = Expr ; | if ( Bool ) Stmt | if ( Bool ) Stmt else Stmt | while ( Bool ) Stmt | return Expr ; | Block | id ( ParamList ) ; 
+Expr -> num | flo | & id | id | id [ Expr ] | * Expr | Expr + Expr | Expr * Expr | ( Expr ) | id ( ParamList )  
 Bool -> Expr rop Expr | Expr  
-ParamList -> epsilon | ParamList Param ,  
-Param -> Expr | id [ ] | id ( )
+ParamList -> epsilon | Param , ParamList
+Param -> Expr | id [ ] | id ( ) //传入数组指针，函数指针
+//主要修改
+//不允许顶层出现stmt，不是python
+//支持basetype指针
+//统一DeclList和StmtList，支持Block级实现
+//简化设计，保留ParamList和ArgList的尾符号

@@ -144,6 +144,47 @@ void printCommonAST(const unique_ptr<ASTNode>& node, int depth) {
 }
 
 
+void AST_test_main() {
+    auto astbase = parserGen(
+        u8"C:/code/CPP/Compiler-Lab/grammar/grammar.txt",
+        u8"C:/code/CPP/Compiler-Lab/grammar/terminal.txt",
+        u8"C:/code/CPP/Compiler-Lab/grammar/SLR1ConflictReslove.txt"
+    );
+    std::ofstream o("output.json");
+    nlohmann::json j = astbase;
+    o << std::setw(4) << j;  // std::setw(4) 控制缩进
+    o.close();
+    std::ifstream file("output.json");
+    nlohmann::json j2;
+    file >> j2;  // 从文件流解析
+    ASTbaseContent astbase2 = j2;
+    AST::AbstractSyntaxTree astT(astbase2);
+    std::string myprogram = R"(
+    int acc() {
+    int a = 1;
+    int b = 2;
+    a = 10;
+    b = 20;
+    if (a < b) {
+        return 1 ;
+    }
+    return 0;
+}
+    )";
+    auto ss = Lexer::scan(toU8str(myprogram));
+    for(int i= 0 ;i < ss.size() ; i++) {
+        auto q = ss[i];
+        std::cout<<"["<<toString(q.type)<<" "<<toString(q.value)<<" "<<i<<"]";
+    }
+    std::cout<<"\n";
+    astT.BuildCommonAST(ss);
+    printCommonAST(astT.root);
+    mVisitor v;
+    astT.root->accept(v);
+    std::cout<<std::endl;
+    return;
+    
+}
 
 } // namespace AST
 
