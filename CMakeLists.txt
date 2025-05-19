@@ -13,6 +13,9 @@ set(ASTSOURCE
     ${ASTROOT}/AST.cpp
     ${ASTROOT}/NodeType/Program.cpp
     ${ASTROOT}/NodeType/ASTbaseType.cpp
+    ${ASTROOT}/NodeType/Declare.cpp
+    ${ASTROOT}/NodeType/Param.cpp
+    ${ASTROOT}/NodeType/Expr.cpp
 )
 
 set(SOURCE 

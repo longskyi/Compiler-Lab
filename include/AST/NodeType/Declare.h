@@ -4,7 +4,8 @@
 #include"AST/NodeType/ASTbaseType.h"
 #include"AST/NodeType/Type.h"
 #include"AST/NodeType/Expr.h"
-
+#include"AST/NodeType/Arg.h"
+#include"AST/NodeType/Program.h"
 namespace AST
 {
     
@@ -13,7 +14,7 @@ class Declare : public ASTNode {};
 class IdDeclare : public Declare 
 {
 public:
-    unique_ptr<pType> type_ptr;
+    SymType id_type;
     unique_ptr<SymIdNode> id_ptr;
     std::optional<int> array_len;
     std::optional<unique_ptr<Expr>> initExpr;
@@ -52,7 +53,7 @@ public:
             assert(dynamic_cast<TermSymNode*>(NonTnode->childs[1].get())->token_type == u8"ID");
 
             auto newNode = std::make_unique<IdDeclare>();
-            newNode->type_ptr.reset(static_cast<pType*>(NonTnode->childs[0].release()));
+            newNode->id_type = (static_cast<pType*>(NonTnode->childs[0].get()))->type;
             newNode->id_ptr = std::make_unique<SymIdNode>();
             newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[1].get())->value;
             return newNode;
@@ -66,7 +67,7 @@ public:
             assert(dynamic_cast<TermSymNode*>(NonTnode->childs[1].get())->token_type == u8"ID");
             assert(dynamic_cast<Expr *>(NonTnode->childs[3].get()) && "是Expr类型节点");
             auto newNode = std::make_unique<IdDeclare>();
-            newNode->type_ptr.reset(static_cast<pType*>(NonTnode->childs[0].release()));
+            newNode->id_type = (static_cast<pType*>(NonTnode->childs[0].get()))->type;
             newNode->id_ptr = std::make_unique<SymIdNode>();
             newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[1].get())->value;
             newNode->initExpr = nullptr;
@@ -82,7 +83,7 @@ public:
             assert(dynamic_cast<TermSymNode*>(NonTnode->childs[1].get())->token_type == u8"ID");
             assert(dynamic_cast<TermSymNode*>(NonTnode->childs[3].get())->token_type == u8"NUM" && "是NUM类型节点");
             auto newNode = std::make_unique<IdDeclare>();
-            newNode->type_ptr.reset(static_cast<pType*>(NonTnode->childs[0].release()));
+            newNode->id_type = (static_cast<pType*>(NonTnode->childs[0].get()))->type;
             newNode->id_ptr = std::make_unique<SymIdNode>();
             newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[1].get())->value;
             newNode->array_len = std::stoi(toString(static_cast<TermSymNode*>(NonTnode->childs[3].get())->value));
@@ -101,7 +102,7 @@ public:
         if(initExpr.has_value()) {
             initExpr.value()->accept(visitor);
         }
-        type_ptr->accept(visitor);
+        id_ptr->accept(visitor);
         visitor.visit(this);
         visitor.quit(this);
         return;
@@ -111,12 +112,21 @@ public:
 class FuncDeclare : public Declare 
 {
 public:
-    unique_ptr<pType> type_ptr;
+    SymType funcRetType;
     unique_ptr<SymIdNode> id_ptr;
-    unique_ptr<ASTNode> ArgList_ptr;
-    unique_ptr<ASTNode> Block_ptr;
+    unique_ptr<ArgList> ArgList_ptr;
+    unique_ptr<Block> Block_ptr;
     static constexpr std::array<std::u8string_view,1> SupportProd=
     {u8"Decl -> Type id ( ArgList ) Block"};
+    inline FuncDeclare() {
+        this->Ntype = ASTType::Declare;
+        this->subType = ASTSubType::FuncDeclare;
+    }
+    static unique_ptr<ASTNode> try_constructS(ASTNode * as , AbstractSyntaxTree * astTree);
+    unique_ptr<ASTNode> try_construct(ASTNode * as , AbstractSyntaxTree * astTree) override {
+        return FuncDeclare::try_constructS(as,astTree);
+    }
+    void accept(ASTVisitor& visitor) override;
 };
 
 

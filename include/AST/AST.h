@@ -34,36 +34,7 @@ void printCommonAST(const unique_ptr<ASTNode>& node, int depth = 0);
 
 void AST_test_main();
 
-inline unique_ptr<ASTNode> AST_specified_node_construct(unique_ptr<NonTermProdNode> prodNode , AbstractSyntaxTree * ast_tree) {
-    unique_ptr<ASTNode> ret;
-    ret = Program::try_constructS(prodNode.get(),ast_tree);
-    if(ret) {
-        return ret;
-    } 
-    ret = BlockItem::try_constructS(prodNode.get(),ast_tree);
-    if(ret) {
-        return ret;
-    }
-    ret = BlockItemList::try_constructS(prodNode.get(),ast_tree);
-    if(ret) {
-        return ret;
-    }
-    ret = IdDeclare::try_constructS(prodNode.get(),ast_tree);
-    if(ret) {
-        return ret;
-    }
-    ret = ConstExpr::try_constructS(prodNode.get(),ast_tree);
-    if(ret) {
-        return ret;
-    }
-    ret = pType::try_constructS(prodNode.get(),ast_tree);
-    if(ret) {
-        return ret;
-    }
-    std::cerr <<"构造失败"<< toString_view(LCMPFileIO::formatProduction(ast_tree->Productions.at(prodNode->prodId),ast_tree->symtab));
-    
-    return nullptr;
-}
+unique_ptr<ASTNode> AST_specified_node_construct(unique_ptr<NonTermProdNode> prodNode , AbstractSyntaxTree * ast_tree);
 
 
 class ASTEnumTypeVisitor : public ASTVisitor {
@@ -83,7 +54,16 @@ public:
             for(int i = 0 ;i <depth;i++) {
                 std::cout<<" ";
             }
-            std::cout<<ASTSubTypeToString(node->subType)<<std::endl;
+            std::cout<<ASTSubTypeToString(node->subType);
+            if(dynamic_cast<ArithExpr *>(node)) {
+                auto eptr = static_cast<ArithExpr *>(node);
+                if(eptr->Op == BinaryOpEnum::ADD) {
+                    std::cout<<" +";
+                } else if(eptr->Op == BinaryOpEnum::MUL) {
+                    std::cout<<" *";
+                }
+            }
+            std::cout<<std::endl;
         }
         depth++;
         return;

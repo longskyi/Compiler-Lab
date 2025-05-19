@@ -1,7 +1,7 @@
 #ifndef M_AST_STMT_TYPE_HEADER
 #define M_AST_STMT_TYPE_HEADER
 #include"AST/NodeType/ASTbaseType.h"
-
+#include"AST/NodeType/Expr.h"
 
 namespace AST
 {
@@ -11,7 +11,9 @@ class Block;
 
 class Stmt : public ASTNode 
 {
-
+    inline Stmt() {
+        this->Ntype = ASTType::Stmt;
+    }
 };
 
 class BlockStmt : public Stmt 

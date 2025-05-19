@@ -8,6 +8,7 @@ const char* ASTTypeToString(ASTType type) {
         case ASTType::Common: return "Common";
         case ASTType::TermSym: return "TermSym";
         case ASTType::NonTermPordNode: return "NonTermPordNode";
+        case ASTType::SymIdNode : return "SymIdNode";
         case ASTType::Expr: return "Expr";
         case ASTType::ArgList: return "ArgList";
         case ASTType::Arg: return "Arg";
@@ -31,9 +32,10 @@ const char* ASTSubTypeToString(ASTSubType subtype) {
         case ASTSubType::SubCommon: return "SubCommon";
         case ASTSubType::TermSym: return "TermSym";
         case ASTSubType::NonTermPordNode: return "NonTermPordNode";
+        case ASTSubType::SymIdNode : return "SymIdNode";
         case ASTSubType::Expr: return "Expr";
         case ASTSubType::ConstExpr: return "ConstExpr";
-        case ASTSubType::DeferExpr: return "DeferExpr";
+        case ASTSubType::DerefExpr: return "DerefExpr";
         case ASTSubType::CallExpr: return "CallExpr";
         case ASTSubType::ArithExpr: return "ArithExpr";
         case ASTSubType::RightValueExpr: return "RightValueExpr";

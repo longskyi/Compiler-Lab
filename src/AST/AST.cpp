@@ -255,6 +255,48 @@ void printCommonAST(const unique_ptr<ASTNode>& node, int depth) {
     }
 }
 
+unique_ptr<ASTNode> AST_specified_node_construct(unique_ptr<NonTermProdNode> prodNode , AbstractSyntaxTree * ast_tree) {
+    unique_ptr<ASTNode> ret;
+    ret = Program::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; } 
+    ret = BlockItem::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = BlockItemList::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = IdDeclare::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = ConstExpr::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = pType::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = ArgList::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = Arg::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = Block::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = FuncDeclare::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = RightValueExpr::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = DerefExpr::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = CallExpr::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = ArithExpr::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = Param::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = ParamList::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = Arg::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = ArgList::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    std::cerr <<"构造失败"<< toString_view(LCMPFileIO::formatProduction(ast_tree->Productions.at(prodNode->prodId),ast_tree->symtab));
+    
+    return nullptr;
+}
 
 void AST_test_main() {
     auto astbase = parserGen(
@@ -292,11 +334,17 @@ void AST_test_main() {
     astT.BuildCommonAST(ss);
     //printCommonAST(astT.root);
     mVisitor v;
-    astT.root->accept(v);
+    //astT.root->accept(v);
     std::cout<<std::endl;
 
     std::u8string myprogram2 = u8R"(
     int acc =1;
+    float b =2;
+    int main() {
+        int a = 4 + 16 * 5;
+        int b = 8;
+        int c [10];
+    }
     )";
     auto ss2 = Lexer::scan(myprogram2);
     for(int i= 0 ;i < ss2.size() ; i++) {
@@ -306,7 +354,7 @@ void AST_test_main() {
     std::cout<<std::endl;
     astT.BuildSpecifiedAST(ss2);
     ASTEnumTypeVisitor v2;
-    v2.moveSequence = true;
+    //v2.moveSequence = true;
     astT.root->accept(v2);
     return;
     

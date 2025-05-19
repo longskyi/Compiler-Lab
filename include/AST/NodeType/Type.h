@@ -6,7 +6,7 @@
 
 namespace AST
 {
-    
+//pType只在构建过程中出现，最终会被折叠进声明或者Arg
 class pType : public ASTNode 
 {
 public:

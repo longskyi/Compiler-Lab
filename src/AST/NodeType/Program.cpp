@@ -40,8 +40,6 @@ unique_ptr<ASTNode> Program::try_constructS(ASTNode * as , AbstractSyntaxTree * 
         return nullptr;
     }
 }
-
-
 void Program::accept(ASTVisitor& visitor) {
     visitor.enter(this);
     visitor.visit(this);

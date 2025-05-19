@@ -25,6 +25,8 @@ const std::vector<token> wordkey =
     {"PRINT","print"} };
 const std::vector<token> skey = 
     {{"LBR","{"},
+    {"LBK","["},
+    {"RBK","]"},
     {"RBR","}"},
     {"LPA","("},
     {"RPA",")"},

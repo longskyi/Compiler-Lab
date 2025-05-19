@@ -53,6 +53,8 @@ enum class ASTType {
     TermSym,
     NonTermPordNode,
 
+    SymIdNode,
+
     Expr,
     ArgList,
     Arg,
@@ -77,9 +79,11 @@ enum class ASTSubType {
     TermSym,
     NonTermPordNode,
 
+    SymIdNode,
+
     Expr,
     ConstExpr,
-    DeferExpr,
+    DerefExpr,
     CallExpr,
     ArithExpr,
     RightValueExpr,
@@ -190,6 +194,15 @@ class SymIdNode : public ASTNode
 public :
     u8string Literal;
     void * symEntryPtr; //program symbol entry ptr
+    inline SymIdNode() {
+        this->Ntype = ASTType::SymIdNode;
+        this->subType = ASTSubType::SymIdNode;
+    }
+    inline void accept(ASTVisitor & visitor) override {
+        visitor.enter(this);
+        visitor.visit(this);
+        visitor.quit(this);
+    }
 };
 
 /**
