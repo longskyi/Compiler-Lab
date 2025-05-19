@@ -299,6 +299,7 @@ namespace LCMPFileIO {
         std::istringstream rhsStream(rhsPart);
         std::string token;
         while (rhsStream >> token) {
+            if(token!="epsilon")
             prod.rhs.push_back(token);
         }
         
@@ -408,6 +409,25 @@ namespace LCMPFileIO {
         return 0;
     }
 
+
+
+
+std::u8string formatProduction(const Production& prod , const SymbolTable& symtab) {
+    std::u8string result;
+    result += u8"[";
+    result += symtab[prod.lhs()].sym();
+    result += u8" -> ";
+    const auto& rhs = prod.rhs();
+    for (size_t i = 0; i < rhs.size(); ++i) {
+        result += symtab[rhs[i]].sym();
+        if (i != rhs.size() - 1) {
+            result += u8" ";
+        }
+    }    
+    result += u8"]";
+    return result;
+}
+
 }
 
 
@@ -514,3 +534,4 @@ void to_json(nlohmann::json& j, const ASTbaseContent & obj) {
     {"states",obj.states},
     {"symtab",obj.symtab}};
 }
+

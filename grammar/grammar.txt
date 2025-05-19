@@ -1,8 +1,7 @@
-Program -> DeclList 
-DeclList -> epsilon | DeclList Decl
-Block -> { BlockItemList }  
+Program -> BlockItemList
 BlockItemList -> epsilon | BlockItemList BlockItem
 BlockItem -> Decl | Stmt
+Block -> { BlockItemList }  
 Type -> BaseType | BaseType *  
 BaseType -> int | float | void  
 Decl -> Type id ;| Type id = Expr ; | Type id [ num ] ; | Type id ( ArgList ) Block

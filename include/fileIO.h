@@ -147,6 +147,7 @@ namespace LCMPFileIO
     ForceReducedProd parseProductionR(const std::u8string& line);
     std::vector<ForceReducedProd> parseProdFileR (const std::filesystem::path & inputPath);
     int test_main_strProd(const std::filesystem::path& inputPath);
+    std::u8string formatProduction(const Production& prod , const SymbolTable& symtab);
 } // namespace LCMPFileIO
 
 
@@ -161,6 +162,7 @@ inline void from_json(nlohmann::json & j, LCMPFileIO::SupportedType auto & obj) 
 void readTerminals(SymbolTable & symtable,std::filesystem::path terminalPath);
 
 void readProductionRule(SymbolTable & symtable,std::vector<Production> & productions , std::filesystem::path rulePath);
+
 
 
 

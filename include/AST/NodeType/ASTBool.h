@@ -15,11 +15,13 @@ public:
     ~ASTBool();
 };
 
-ASTBool::ASTBool(/* args */)
+inline ASTBool::ASTBool(/* args */)
 {
+    this->Ntype = ASTType::ASTBool;
+    this->subType = ASTSubType::ASTBool;
 }
 
-ASTBool::~ASTBool()
+inline ASTBool::~ASTBool()
 {
 }
 

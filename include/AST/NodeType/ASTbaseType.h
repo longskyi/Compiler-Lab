@@ -5,6 +5,7 @@
 #include<vector>
 #include<SyntaxType.h>
 #include<stringUtil.h>
+#include"parserGen.h"
 namespace AST {
 
 
@@ -111,6 +112,10 @@ enum class ASTSubType {
     pType,
 };
 
+
+const char* ASTTypeToString(ASTType type);
+const char* ASTSubTypeToString(ASTSubType subtype);
+
 class ASTVisitor;
 
 class ASTNode
@@ -119,11 +124,13 @@ public:
     ASTType Ntype;
     ASTSubType subType;
     /**
-     * @brief 允许调用visitor访问，不要针对visitor类型进行特化
+     * @brief 允许调用visitor访问，实现自动递归的爬树，进入时调用enter，退出时调用quit，中间按照求值优先级顺序调用visit（包括自己）
+     * @attention 不要考虑针对visitor类型的特化
      */
-    virtual void accept(ASTVisitor& visitor) = 0; 
+    inline virtual void accept(ASTVisitor& visitor) { return; }
     /**
      * @brief 用于尝试构建的函数，构建成功返回智能指针，否则返回nullptr
+     * @attention 理论上这其实不必是一个虚函数，应该调用派生类的static函数
      */
     inline virtual unique_ptr<ASTNode> try_construct(ASTNode * as , AbstractSyntaxTree * astTree) {
         return nullptr;
@@ -141,7 +148,14 @@ public:
 
 class ASTVisitor {
 public:
+
     virtual void visit(ASTNode* node) = 0;
+    inline virtual void enter(ASTNode* node) {
+        return;
+    }
+    inline virtual void quit(ASTNode* node) {
+        return;
+    }
 };
 
 
@@ -157,10 +171,12 @@ public:
     }
     inline void accept(ASTVisitor & visitor) override {
         //前序遍历
+        visitor.enter(this);
         visitor.visit(this);
         for(auto & kid : childs) {
             kid->accept(visitor);
         }
+        visitor.quit(this);
         return;
     }
     u8string type; //原始类型-非终结符
@@ -186,6 +202,12 @@ public:
     std::u8string value;
     TermSymNode(/* args */);
     ~TermSymNode();
+    inline void accept(ASTVisitor& visitor) override {
+        visitor.enter(this);
+        visitor.visit(this);
+        visitor.quit(this);
+        return;
+    }
 };
 
 inline TermSymNode::TermSymNode(/* args */)
@@ -208,6 +230,15 @@ public:
     std::vector<unique_ptr<ASTNode>> childs;
     NonTermProdNode(/* args */);
     ~NonTermProdNode();
+    inline void accept(ASTVisitor& visitor) override {
+        visitor.enter(this);
+        visitor.visit(this);
+        for(const auto & item: childs) {
+            item->accept(visitor);
+        }
+        visitor.quit(this);
+        return;
+    }
 };
 
 inline NonTermProdNode::NonTermProdNode(/* args */)
@@ -235,6 +266,7 @@ public:
         root = nullptr;
     }
     bool BuildCommonAST(const std::vector<Lexer::scannerToken_t> & tokens);
+    bool BuildSpecifiedAST(const std::vector<Lexer::scannerToken_t> & tokens);
     virtual ~AbstractSyntaxTree() = default;
 };
 

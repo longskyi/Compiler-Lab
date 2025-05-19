@@ -5,6 +5,15 @@ set(CMAKE_C_STANDARD 23)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
+set(ASTROOT
+    ${CMAKE_CURRENT_LIST_DIR}/src/AST
+)
+
+set(ASTSOURCE
+    ${ASTROOT}/AST.cpp
+    ${ASTROOT}/NodeType/Program.cpp
+    ${ASTROOT}/NodeType/ASTbaseType.cpp
+)
 
 set(SOURCE 
     ${CMAKE_CURRENT_LIST_DIR}/src/main.cpp
@@ -14,7 +23,7 @@ set(SOURCE
     ${CMAKE_CURRENT_LIST_DIR}/src/SyntaxType.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/fileIO.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/parserGen.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/src/AST/AST.cpp
+    ${ASTSOURCE}
     )
 
 
