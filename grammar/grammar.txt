@@ -7,7 +7,7 @@ Type -> BaseType | BaseType *
 BaseType -> int | float | void  
 Decl -> Type id ;| Type id = Expr ; | Type id [ num ] ; | Type id ( ArgList ) Block
 ArgList -> epsilon | Arg ; ArgList
-Arg -> Type id | Type id [ ] | Type id ( Type )  //声明函数指针时，使用的，仅支持传入单变量（含void）函数指针
+Arg -> Type id | Type id [ ] | Type id ( )
 Stmt -> id = Expr ; | id [ Expr ] = Expr ; | if ( Bool ) Stmt | if ( Bool ) Stmt else Stmt | while ( Bool ) Stmt | return Expr ; | Block | id ( ParamList ) ; 
 Expr -> num | flo | & id | id | id [ Expr ] | * Expr | Expr + Expr | Expr * Expr | ( Expr ) | id ( ParamList )  
 Bool -> Expr rop Expr | Expr  

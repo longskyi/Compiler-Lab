@@ -305,7 +305,7 @@ namespace LCMPFileIO {
         return prod;
     }
 
-    U8StrProduction parseProduction(const std::u8string& line) {
+    U8StrProduction parseProduction(const std::u8string_view& line) {
         auto q = parseProduction(toString(line));
         U8StrProduction tmp;
         copyToU8strProduction(tmp,q);
@@ -407,5 +407,110 @@ namespace LCMPFileIO {
 
         return 0;
     }
+
 }
 
+
+
+inline void LCMPFileIO::JsonConverter::deserializeP(const nlohmann::json& j, SymbolTable& st) {
+    j.at("next_index").get_to(st.next_index_);
+    j.at("nonTerminalId").get_to(st.nonTerminalId);
+    j.at("name_to_index").get_to(st.name_to_index_);
+    std::vector<nlohmann::json> symbols;    //提供默认构造函数
+    j.at("symbols").get_to(symbols);
+    for(auto & p : symbols) {
+        Symbol a(u8"",u8"",u8"",false,0);
+        from_json(p,a);
+        st.symbols_.emplace_back(std::move(a));
+    }
+}
+
+
+void LCMPFileIO::JsonConverter::serialize(json& j, const SymbolTable& st) {
+    j = {
+    {"next_index", st.next_index_},
+    {"nonTerminalId", st.nonTerminalId},
+    {"name_to_index",st.name_to_index_},
+    {"symbols",st.symbols_}
+    };
+}
+
+void LCMPFileIO::JsonConverter::serialize(json& j, const Production & obj) {
+    j = {
+        {"index",obj.index_},
+        {"lhs_index",obj.lhs_index_},
+        {"next_index",obj.next_index_},
+        {"rhs_indices",obj.rhs_indices_},
+    };
+}
+
+void LCMPFileIO::JsonConverter::serialize(json& j, const dotProdc & obj) {
+    j = {
+        {"dot_pos",obj.dot_pos},
+        {"prodcId",obj.producId},
+    };
+}
+
+
+void from_json(const nlohmann::json& j, ASTbaseContent& obj) {
+    j.at("gotoTable").get_to(obj.gotoTable);
+    j.at("actionTable").get_to(obj.actionTable);
+    j.at("states").get_to(obj.states);
+    j.at("symtab").get_to(obj.symtab);
+    std::unordered_map<ProductionId, nlohmann::json> prods;
+    j.at("Productions").get_to(prods);
+    obj.Productions.clear();
+    NonTerminalId lhs_index_;
+    std::vector<SymbolId> rhs_indices_;
+    ProductionId index_;
+    auto prod = LCMPFileIO::JsonConverter::Production_Construct_helper(lhs_index_,rhs_indices_,index_);
+    for(auto p : prods) {
+        from_json(p.second,prod);
+        obj.Productions.insert(std::make_pair(p.first,prod));
+    }
+}
+
+
+void from_json(const nlohmann::json& j, Production& obj) {
+    NonTerminalId lhs_index_;
+    std::vector<SymbolId> rhs_indices_;
+    ProductionId index_;
+    size_t next_index_;
+    j.at("index").get_to(index_);
+    j.at("lhs_index").get_to(lhs_index_);
+    //j.at("next_index").get_to(next_index_);
+    j.at("rhs_indices").get_to(rhs_indices_);
+    obj = LCMPFileIO::JsonConverter::Production_Construct_helper(lhs_index_,rhs_indices_,index_);
+}
+
+void to_json(nlohmann::json & j, const action & obj) {
+    auto visitor = overload {
+        [&j](ProductionId v) {
+            j = {{"type",1},{"val",v}};
+        },
+        [&j](StateId v) {
+            j = {{"type",2},{"val",v}};
+        }
+    };
+    std::visit(visitor,obj);
+}
+
+void from_json(const nlohmann::json& j, action& obj) {
+    int type = j.at("type").get<int>();
+    if (type == 1) {
+        obj = j.at("val").get<ProductionId>();
+    } else if (type == 2) {
+        obj = j.at("val").get<StateId>();
+    } else {
+        throw std::runtime_error("Invalid action type");
+    }
+}
+
+void to_json(nlohmann::json& j, const ASTbaseContent & obj) {
+    j = {
+    {"gotoTable",obj.gotoTable},
+    {"Productions",obj.Productions},
+    {"actionTable",obj.actionTable},
+    {"states",obj.states},
+    {"symtab",obj.symtab}};
+}

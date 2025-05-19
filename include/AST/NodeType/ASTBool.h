@@ -8,9 +8,9 @@ namespace AST
 
 class ASTBool : public ASTNode
 {
-private:
-    /* data */
 public:
+    static constexpr std::array<std::u8string_view,2> SupportProd=
+    {u8"Bool -> Expr rop Expr",u8"Bool -> Expr" };
     ASTBool(/* args */);
     ~ASTBool();
 };

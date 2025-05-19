@@ -6,10 +6,16 @@
 namespace AST
 {
     
-class ArgList : public ASTNode {};
+class ArgList : public ASTNode 
+{
+public:
+    static constexpr std::array<std::u8string_view,2> SupportProd=
+    {u8"ArgList -> epsilon",u8"ArgList -> Arg ; ArgList"};
+};
 
 class Arg : public ASTNode {};
-
+    static constexpr std::array<std::u8string_view,3> SupportProd=
+    {u8"Arg -> Type id",u8"Type id [ ]",u8"Type id ( )"};
 
 } // namespace AST
 
