@@ -52,7 +52,7 @@ public:
             assert(dynamic_cast<TermSymNode*>(NonTnode->childs[1].get())->token_type == u8"ID");
 
             auto newNode = std::make_unique<IdDeclare>();
-            newNode->id_type = (static_cast<pType*>(NonTnode->childs[0].get()))->type;
+            newNode->id_type = std::move((static_cast<pType*>(NonTnode->childs[0].get()))->type);
             newNode->id_ptr = std::make_unique<SymIdNode>();
             newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[1].get())->value;
             return newNode;
@@ -66,7 +66,7 @@ public:
             assert(dynamic_cast<TermSymNode*>(NonTnode->childs[1].get())->token_type == u8"ID");
             assert(dynamic_cast<Expr *>(NonTnode->childs[3].get()) && "是Expr类型节点");
             auto newNode = std::make_unique<IdDeclare>();
-            newNode->id_type = (static_cast<pType*>(NonTnode->childs[0].get()))->type;
+            newNode->id_type = std::move((static_cast<pType*>(NonTnode->childs[0].get()))->type);
             newNode->id_ptr = std::make_unique<SymIdNode>();
             newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[1].get())->value;
             newNode->initExpr = nullptr;
@@ -82,7 +82,7 @@ public:
             assert(dynamic_cast<TermSymNode*>(NonTnode->childs[1].get())->token_type == u8"ID");
             assert(dynamic_cast<TermSymNode*>(NonTnode->childs[3].get())->token_type == u8"NUM" && "是NUM类型节点");
             auto newNode = std::make_unique<IdDeclare>();
-            newNode->id_type = (static_cast<pType*>(NonTnode->childs[0].get()))->type;
+            newNode->id_type =std::move((static_cast<pType*>(NonTnode->childs[0].get()))->type);
             newNode->id_ptr = std::make_unique<SymIdNode>();
             newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[1].get())->value;
             newNode->array_len = std::stoi(toString(static_cast<TermSymNode*>(NonTnode->childs[3].get())->value));

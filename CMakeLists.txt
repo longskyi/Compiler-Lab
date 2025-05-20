@@ -4,7 +4,7 @@ project(LCCompiler VERSION 0.1.0 LANGUAGES C CXX)
 set(CMAKE_C_STANDARD 23)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
-
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(ASTROOT
     ${CMAKE_CURRENT_LIST_DIR}/src/AST
 )
@@ -16,6 +16,7 @@ set(ASTSOURCE
     ${ASTROOT}/NodeType/Declare.cpp
     ${ASTROOT}/NodeType/Param.cpp
     ${ASTROOT}/NodeType/Expr.cpp
+    ${ASTROOT}/NodeType/Stmt.cpp
 )
 
 set(SOURCE 
@@ -45,7 +46,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 
 if (MSVC)
     target_compile_options(${PROJECT_NAME}
-        PRIVATE /utf-8 /std:c++latest
+        PRIVATE /utf-8 /std:c++latest /MP
     )
     target_compile_definitions(${PROJECT_NAME}
         PRIVATE NOMINMAX

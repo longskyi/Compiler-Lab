@@ -34,16 +34,53 @@ unique_ptr<ASTNode> ConstExpr::try_constructS(ASTNode * as , AbstractSyntaxTree 
         auto * TermNode = static_cast<TermSymNode *>(NonTnode->childs[0].get());
         if(TermNode->token_type == u8"NUM") {
             newNode->value = std::stoi(toString(TermNode->value));
-            newNode->Type.Type = baseType::INT;
+            newNode->Type.basicType = baseType::INT;
         }
         else if(TermNode->token_type == u8"FLO") {
             newNode->value = std::stof(toString(TermNode->value));
-            newNode->Type.Type = baseType::FLOAT;
+            newNode->Type.basicType = baseType::FLOAT;
         }
         else {
             std::unreachable();
         }
         return newNode;
+    }
+}
+
+
+unique_ptr<ASTNode> DerefExpr::try_constructS(ASTNode * as , AbstractSyntaxTree * astTree) {
+    auto * NonTnode = dynamic_cast<NonTermProdNode *>(as);
+    if(!NonTnode) {
+        std::cerr << "Compiler internal Error Expr 不接受非NonTermProdNode的try contrust请求";
+        return nullptr;
+        //throw std::runtime_error("ERROR,ConstExpr不接受非NonTermProdNode的try contrust请求");
+    }
+    //检查 str prod匹配
+    int targetProd = 0;
+    for(targetProd = 0 ; targetProd < SupportProd.size() ; targetProd++) {
+        U8StrProduction u8prod = LCMPFileIO::parseProduction(SupportProd[targetProd]);
+        if(equals(u8prod,astTree->Productions.at(NonTnode->prodId),astTree->symtab)) {
+            break;
+        }
+    }
+    if(targetProd == SupportProd.size()) {
+        return nullptr;
+    }
+    switch (targetProd)
+    {
+    case 0:
+    {
+        // * Expr
+        assert(NonTnode->childs.size() == 2);
+        assert(dynamic_cast<Expr *>(NonTnode->childs[1].get()) && "不是Expr类型节点");
+        
+        auto newNode = std::make_unique<DerefExpr>();
+        newNode->subExpr.reset(static_cast<Expr *>(NonTnode->childs[1].release()));
+        return newNode;
+    }
+    default:
+        std::cerr <<"Not implement Expr Node :"<< targetProd<<std::endl;
+        return nullptr;
     }
 }
 

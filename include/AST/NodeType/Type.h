@@ -44,36 +44,34 @@ public:
             break;
         case 1:
         {
-            //std::unique_ptr<AST::ASTNode>
             std::unique_ptr<pType> newNode(
                 static_cast<pType*>(NonTnode->childs[0].release())
             );
-            if(newNode->type.eType != baseType::NonInit) {
-                std::unreachable();
-            }
-            newNode->type.eType = newNode->type.Type;
-            newNode->type.Type = baseType::BASE_PTR;
+            // if(newNode->type.eType != baseType::NonInit) {
+            //     std::unreachable();
+            // }
+            newNode->type.makePtr();
             return newNode;
         }
         case 2:
         {
             //int
             unique_ptr <pType> newNode = std::make_unique<pType>();
-            newNode->type.Type = baseType::INT;
+            newNode->type.basicType = baseType::INT;
             return newNode;
         }
         case 3:
         {
             //float
             unique_ptr <pType> newNode = std::make_unique<pType>();
-            newNode->type.Type = baseType::FLOAT;
+            newNode->type.basicType = baseType::FLOAT;
             return newNode;
         }
         case 4:
         {
             //void
             unique_ptr <pType> newNode = std::make_unique<pType>();
-            newNode->type.Type = baseType::VOID;
+            newNode->type.basicType = baseType::VOID;
             return newNode;
         }
         default:
@@ -92,6 +90,10 @@ public:
     }
 };
 
+//Not implement
+class pTypeList : public ASTNode {
+
+};
 
 } // namespace AST
 

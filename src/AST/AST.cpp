@@ -359,12 +359,13 @@ void AST_test_main() {
     int acc =1;
     float b =2;
     int main() {
-        int a = 4 + 16 * 5;
+        int a = 200 * 4.11111;
+        a = 16 * 5 + 8;
         int b = 8;
         int c [10];
     }
     )";
-    auto ss2 = Lexer::scan(toU8str(myprogram));
+    auto ss2 = Lexer::scan(toU8str(myprogram2));
     for(int i= 0 ;i < ss2.size() ; i++) {
         auto q = ss2[i];
         std::cout<<"["<<toString(q.type)<<" "<<toString(q.value)<<" "<<i<<"]";
@@ -372,7 +373,9 @@ void AST_test_main() {
     std::cout<<std::endl;
     astT.BuildSpecifiedAST(ss2);
     ASTEnumTypeVisitor v2;
+    ConstantFoldingVisitor v3;
     //v2.moveSequence = true;
+    astT.root->accept(v3);
     astT.root->accept(v2);
     return;
     

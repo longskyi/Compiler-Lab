@@ -36,7 +36,7 @@ unique_ptr<ASTNode> FuncDeclare::try_constructS(ASTNode * as , AbstractSyntaxTre
         assert(dynamic_cast<ArgList*>(NonTnode->childs[3].get()));
         assert(dynamic_cast<Block*>(NonTnode->childs[5].get()));
         auto newNode = std::make_unique<FuncDeclare>();
-        newNode->funcRetType = (static_cast<pType*>(NonTnode->childs[0].get()))->type;
+        newNode->funcRetType = std::move((static_cast<pType*>(NonTnode->childs[0].get()))->type);
         newNode->id_ptr = std::make_unique<SymIdNode>();
         newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[1].get())->value;
         newNode->ArgList_ptr.reset(static_cast<ArgList *>(NonTnode->childs[3].release()));

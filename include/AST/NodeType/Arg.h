@@ -51,7 +51,7 @@ public:
             assert(dynamic_cast<TermSymNode*>(NonTnode->childs[1].get())->token_type == u8"ID");
 
             auto newNode = std::make_unique<Arg>();
-            newNode->argtype = (static_cast<pType*>(NonTnode->childs[0].get()))->type;
+            newNode->argtype = std::move((static_cast<pType*>(NonTnode->childs[0].get()))->type);
             newNode->id_ptr = std::make_unique<SymIdNode>();
             newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[1].get())->value;
             return newNode;
@@ -64,12 +64,10 @@ public:
             assert(dynamic_cast<TermSymNode*>(NonTnode->childs[1].get()));
             assert(dynamic_cast<TermSymNode*>(NonTnode->childs[1].get())->token_type == u8"ID");
             auto newNode = std::make_unique<Arg>();
-            newNode->argtype = (static_cast<pType*>(NonTnode->childs[0].get()))->type;
+            newNode->argtype = std::move((static_cast<pType*>(NonTnode->childs[0].get()))->type);
             newNode->id_ptr = std::make_unique<SymIdNode>();
             newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[1].get())->value;
-            newNode->argtype.eeType = newNode->argtype.eType;
-            newNode->argtype.eType = newNode->argtype.Type;
-            newNode->argtype.Type = baseType::ARRAY_PTR;
+            newNode->argtype.makePtr();
             return newNode;
         }
         case 2:
@@ -80,12 +78,10 @@ public:
             assert(dynamic_cast<TermSymNode*>(NonTnode->childs[1].get()));
             assert(dynamic_cast<TermSymNode*>(NonTnode->childs[1].get())->token_type == u8"ID");
             auto newNode = std::make_unique<Arg>();
-            newNode->argtype = (static_cast<pType*>(NonTnode->childs[0].get()))->type;
+            newNode->argtype = std::move((static_cast<pType*>(NonTnode->childs[0].get()))->type);
             newNode->id_ptr = std::make_unique<SymIdNode>();
             newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[1].get())->value;
-            newNode->argtype.eeType = newNode->argtype.eType;
-            newNode->argtype.eType = newNode->argtype.Type;
-            newNode->argtype.Type = baseType::FUNC_PTR;
+            newNode->argtype.makeFuncPtr({});
             return newNode;
         }
         default:

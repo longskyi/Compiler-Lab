@@ -4,6 +4,7 @@
 //#include<unordered_map>
 #include<filesystem>
 //#include"stringUtil.h"
+#include "AST/NodeType/ASTbaseType.h"
 #include"SyntaxType.h"
 #include"lcmpfileio.h"
 //#include"DFA.h"
@@ -16,6 +17,7 @@ namespace fs = std::filesystem;
 int main()
 {
     //LCMPFileIO::test_main_strProd(fs::path(u8"c:/code/CPP/Compiler-Lab/grammar/SLR1ConflictReslove.txt"));
+    AST::test_typeSystem_main();
     AST::AST_test_main();
     return 0;
     //NFA_NS::test_regex_to_dfa();
