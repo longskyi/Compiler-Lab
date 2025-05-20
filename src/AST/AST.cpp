@@ -311,6 +311,10 @@ unique_ptr<ASTNode> AST_specified_node_construct(unique_ptr<NonTermProdNode> pro
     if(ret) { return ret; }
     ret = Expr::try_constructS(prodNode.get(),ast_tree);
     if(ret) { return ret; }
+    ret = pTypeList::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = Dimensions::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
     std::cerr <<"构造失败"<< toString_view(LCMPFileIO::formatProduction(ast_tree->Productions.at(prodNode->prodId),ast_tree->symtab));
     
     return nullptr;

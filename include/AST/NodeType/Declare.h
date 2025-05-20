@@ -9,6 +9,72 @@
 namespace AST
 {
     
+class Dimensions : public ASTNode {
+public:
+    std::vector<int> array_len_vec;
+    inline Dimensions() {
+        this->Ntype = ASTType::Dimensions;
+        this->subType = ASTSubType::Dimensions;
+    }
+    static constexpr std::array<std::u8string_view,3> SupportProd=
+    {u8"Dimensions -> [ num ]",u8"Dimensions -> Dimensions [ num ]" };
+    inline static unique_ptr<ASTNode> try_constructS(ASTNode * as , AbstractSyntaxTree * astTree) {
+        auto * NonTnode = dynamic_cast<NonTermProdNode *>(as);
+        if(!NonTnode) {
+            std::cerr << "Compiler internal Error ptype 不接受非NonTermProdNode的try contrust请求";
+            return nullptr;
+            //throw std::runtime_error("ERROR,ConstExpr不接受非NonTermProdNode的try contrust请求");
+        }
+        //检查 str prod匹配
+        int targetProd = 0;
+        for(targetProd = 0 ; targetProd < SupportProd.size() ; targetProd++) {
+            U8StrProduction u8prod = LCMPFileIO::parseProduction(SupportProd[targetProd]);
+            if(equals(u8prod,astTree->Productions.at(NonTnode->prodId),astTree->symtab)) {
+                break;
+            }
+        }
+        if(targetProd == SupportProd.size()) {
+            return nullptr;
+        }
+        switch (targetProd)
+        {
+        case 0:
+        {
+            //[ num ];
+            assert(NonTnode->childs.size() == 3);
+            assert(dynamic_cast<TermSymNode*>(NonTnode->childs[1].get()));
+            assert(dynamic_cast<TermSymNode*>(NonTnode->childs[1].get())->token_type == u8"NUM");
+
+            auto newNode = std::make_unique<Dimensions>();
+            newNode->array_len_vec.push_back(std::stoi(toString(static_cast<TermSymNode*>(NonTnode->childs[1].get())->value)));
+            return newNode;
+        }
+        case 1:
+        {
+            //Dimensions [ num ]
+            assert(NonTnode->childs.size() == 4);
+            assert(dynamic_cast<Dimensions *>(NonTnode->childs[0].get()) && "是基本类型节点");
+            assert(dynamic_cast<TermSymNode*>(NonTnode->childs[2].get())->token_type == u8"NUM");
+            unique_ptr<Dimensions> stoleNode;
+            stoleNode.reset(static_cast<Dimensions *>(NonTnode->childs[0].release()));
+            stoleNode->array_len_vec.push_back(std::stoi(toString(static_cast<TermSymNode*>(NonTnode->childs[2].get())->value)));
+            return stoleNode;
+        }
+        default:
+            std::cerr <<"Not implement IdDeclare Node :"<< targetProd<<std::endl;
+            return nullptr;
+        }
+    }
+    unique_ptr<ASTNode> try_construct(ASTNode * as , AbstractSyntaxTree * astTree) override {
+        return Dimensions::try_constructS(as,astTree);
+    }
+    inline void accept(ASTVisitor& visitor) override {
+        visitor.enter(this);
+        visitor.visit(this);
+        visitor.quit(this);
+        return;
+    }
+};
 
 class IdDeclare : public Declare 
 {
@@ -22,7 +88,7 @@ public:
         this->subType = ASTSubType::IdDeclare;
     }
     static constexpr std::array<std::u8string_view,3> SupportProd=
-    {u8"Decl -> Type id ;",u8"Decl -> Type id = Expr ; ",u8"Decl -> Type id [ num ] ;" };
+    {u8"Decl -> Type id ;",u8"Decl -> Type id = Expr ; ",u8"Decl -> Type id Dimensions ;" };
     inline static unique_ptr<ASTNode> try_constructS(ASTNode * as , AbstractSyntaxTree * astTree) {
         auto * NonTnode = dynamic_cast<NonTermProdNode *>(as);
         if(!NonTnode) {
@@ -75,17 +141,19 @@ public:
         }
         case 2:
         {
-            //Type id [ num ] ;
-            assert(NonTnode->childs.size() == 6);
+            //Type id Dimensions ;
+            assert(NonTnode->childs.size() == 4);
             assert(dynamic_cast<pType *>(NonTnode->childs[0].get()) && "是基本类型节点");
             assert(dynamic_cast<TermSymNode*>(NonTnode->childs[1].get()));
             assert(dynamic_cast<TermSymNode*>(NonTnode->childs[1].get())->token_type == u8"ID");
-            assert(dynamic_cast<TermSymNode*>(NonTnode->childs[3].get())->token_type == u8"NUM" && "是NUM类型节点");
+            assert(dynamic_cast<Dimensions*>(NonTnode->childs[2].get()) && "是Dimension类型节点");
             auto newNode = std::make_unique<IdDeclare>();
             newNode->id_type =std::move((static_cast<pType*>(NonTnode->childs[0].get()))->type);
             newNode->id_ptr = std::make_unique<SymIdNode>();
             newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[1].get())->value;
-            newNode->array_len = std::stoi(toString(static_cast<TermSymNode*>(NonTnode->childs[3].get())->value));
+            for(const auto & len : static_cast<Dimensions *>(NonTnode->childs[2].get())->array_len_vec) {
+                newNode->id_type.makeArray(len);
+            }
             return newNode;
         }
         default:
@@ -112,6 +180,7 @@ class FuncDeclare : public Declare
 {
 public:
     SymType funcRetType;
+    SymType funcType;   //包含所有内容
     unique_ptr<SymIdNode> id_ptr;
     unique_ptr<ArgList> ArgList_ptr;
     unique_ptr<Block> Block_ptr;

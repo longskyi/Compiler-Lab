@@ -28,8 +28,8 @@ std::string toString(T str) {
     return std::string(reinterpret_cast<const char*>(str.c_str()));
 }
 
-inline std::string_view toString_view(const std::u8string & u8str) {
-    return std::string_view(reinterpret_cast<const char*>(u8str.c_str()));
+inline std::string_view toString_view(const std::u8string_view & u8str) {
+    return std::string_view(reinterpret_cast<const char*>(u8str.data()),u8str.size());
 }
 
 template<typename T>

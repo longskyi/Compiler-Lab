@@ -41,8 +41,8 @@ class ParamList : public ASTNode
 {
 public:
     std::vector<unique_ptr<Param>> paramList;
-    static constexpr std::array<std::u8string_view,2> SupportProd=
-    {u8"ParamList -> epsilon",u8"ParamList -> Param , ParamList"};
+    static constexpr std::array<std::u8string_view,3> SupportProd=
+    {u8"ParamList -> epsilon",u8"ParamList -> Param , ParamList",u8"ParamList -> Param"};
     inline static unique_ptr<ASTNode> try_constructS(ASTNode * as , AbstractSyntaxTree * astTree) {
         auto * NonTnode = dynamic_cast<NonTermProdNode *>(as);
         if(!NonTnode) {
@@ -80,6 +80,17 @@ public:
             frontNode.reset(static_cast<Param *>(NonTnode->childs[0].release()));
             addNode->paramList.emplace(addNode->paramList.begin(), std::move(frontNode));
             return addNode;
+        }
+        case 2:
+        {
+            //ParamList -> Param
+            assert(NonTnode->childs.size() == 1);
+            assert(dynamic_cast<Param *>(NonTnode->childs[0].get()) && "是List类型节点");
+            auto newNode = std::make_unique<ParamList>();
+            unique_ptr<Param> addNode;
+            addNode.reset(static_cast<Param*>(NonTnode->childs[0].release()));
+            newNode->paramList.emplace_back(std::move(addNode));
+            return newNode;
         }
         default:
             std::cerr <<"Not implement BlockItemList Node :"<< targetProd<<std::endl;

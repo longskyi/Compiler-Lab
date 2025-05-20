@@ -41,6 +41,14 @@ unique_ptr<ASTNode> FuncDeclare::try_constructS(ASTNode * as , AbstractSyntaxTre
         newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[1].get())->value;
         newNode->ArgList_ptr.reset(static_cast<ArgList *>(NonTnode->childs[3].release()));
         newNode->Block_ptr.reset(static_cast<Block *>(NonTnode->childs[5].release()));
+
+        std::vector<SymType> argTypes;
+        for(const auto & t : newNode->ArgList_ptr->argLists) {
+            const auto & typei = t->argtype;
+            argTypes.push_back(typei);
+        }
+        newNode->funcType = newNode->funcRetType;
+        newNode->funcType.makeFunc(argTypes);
         return newNode;
     }
     default:

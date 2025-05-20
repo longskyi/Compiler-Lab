@@ -16,7 +16,7 @@ public:
     SymType argtype;
     unique_ptr<SymIdNode> id_ptr;
     static constexpr std::array<std::u8string_view,3> SupportProd=
-    {u8"Arg -> Type id",u8"Arg -> Type id [ ]",u8"Arg -> Type id ( )"};
+    {u8"Arg -> Type id",u8"Arg -> Type id [ ]",u8"Arg -> Type id ( TypeList )"};
     inline Arg() {
         this->Ntype = ASTType::Arg;
         this->subType = ASTSubType::Arg;
@@ -59,7 +59,7 @@ public:
         case 1:
         {
             //Type id [ ] 
-            assert(NonTnode->childs.size() == 6);
+            assert(NonTnode->childs.size() == 4);
             assert(dynamic_cast<pType *>(NonTnode->childs[0].get()) && "是基本类型节点");
             assert(dynamic_cast<TermSymNode*>(NonTnode->childs[1].get()));
             assert(dynamic_cast<TermSymNode*>(NonTnode->childs[1].get())->token_type == u8"ID");
@@ -72,16 +72,23 @@ public:
         }
         case 2:
         {
-            //Type id ( )
-            assert(NonTnode->childs.size() == 6);
+            //Type id ( TypeList )
+            assert(NonTnode->childs.size() == 5);
             assert(dynamic_cast<pType *>(NonTnode->childs[0].get()) && "是基本类型节点");
+            assert(dynamic_cast<pTypeList *>(NonTnode->childs[3].get()) && "是list类型节点");
             assert(dynamic_cast<TermSymNode*>(NonTnode->childs[1].get()));
             assert(dynamic_cast<TermSymNode*>(NonTnode->childs[1].get())->token_type == u8"ID");
             auto newNode = std::make_unique<Arg>();
             newNode->argtype = std::move((static_cast<pType*>(NonTnode->childs[0].get()))->type);
             newNode->id_ptr = std::make_unique<SymIdNode>();
             newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[1].get())->value;
-            newNode->argtype.makeFuncPtr({});
+            auto VecType = std::vector<SymType>();
+            auto listnode_ptr = unique_ptr<pTypeList>();
+            listnode_ptr.reset(static_cast<pTypeList *>(NonTnode->childs[3].release()));
+            for(const auto & typei : listnode_ptr->typeLists) {
+                VecType.push_back(typei->type);
+            }
+            newNode->argtype.makeFuncPtr(VecType);
             return newNode;
         }
         default:
@@ -105,8 +112,9 @@ class ArgList : public ASTNode
 {
 public:
     std::vector<unique_ptr<Arg>> argLists;
-    static constexpr std::array<std::u8string_view,2> SupportProd=
-    {u8"ArgList -> epsilon",u8"ArgList -> Arg ; ArgList"};
+    static constexpr std::array<std::u8string_view,3> SupportProd=
+    //ArgList -> epsilon | Arg ; ArgList | Arg
+    {u8"ArgList -> epsilon",u8"ArgList -> Arg ; ArgList",u8"ArgList -> Arg"};
     inline ArgList() {
         this->Ntype = ASTType::ArgList;
         this->subType = ASTSubType::ArgList;
@@ -138,13 +146,27 @@ public:
         }
         case 1:
         {
-            assert(NonTnode->childs.size() == 2);
-            assert(dynamic_cast<ArgList *>(NonTnode->childs[0].get()) && "是List类型节点");
-            assert(dynamic_cast<Arg *>(NonTnode->childs[1].get()) && "是Item类型节点");
+            //ArgList -> Arg ; ArgList
+            assert(NonTnode->childs.size() == 3);
+            assert(dynamic_cast<ArgList *>(NonTnode->childs[2].get()) && "不是List类型节点");
+            assert(dynamic_cast<Arg *>(NonTnode->childs[0].get()) && "不是Item类型节点");
             unique_ptr<ArgList> addNode;
-            addNode.reset(static_cast<ArgList*>(NonTnode->childs[0].release()));
-            addNode->argLists.emplace_back(std::move(static_cast<Arg *>(NonTnode->childs[1].release())));
+            addNode.reset(static_cast<ArgList*>(NonTnode->childs[2].release()));
+            unique_ptr<Arg> frontNode;
+            frontNode.reset(static_cast<Arg *>(NonTnode->childs[0].release()));
+            addNode->argLists.emplace(addNode->argLists.begin(), std::move(frontNode));
             return addNode;
+        }
+        case 2:
+        {
+            //ArgList -> Arg
+            assert(NonTnode->childs.size() == 1);
+            assert(dynamic_cast<Arg *>(NonTnode->childs[0].get()) && "是List类型节点");
+            auto newNode = std::make_unique<ArgList>();
+            unique_ptr<Arg> addNode;
+            addNode.reset(static_cast<Arg*>(NonTnode->childs[0].release()));
+            newNode->argLists.emplace_back(std::move(addNode));
+            return newNode;
         }
         default:
             std::cerr <<"Not implement ArgList Node :"<< targetProd<<std::endl;

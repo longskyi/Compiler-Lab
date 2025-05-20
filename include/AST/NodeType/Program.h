@@ -150,6 +150,7 @@ class Block : public ASTNode
 private:
     /* data */
 public:
+    void * symTable;    //由于Block不具名，所以需要绑定table
     unique_ptr<BlockItemList> ItemList_ptr;
     static constexpr std::array<std::u8string_view,1> SupportProd=
     {u8"Block -> { BlockItemList }"};

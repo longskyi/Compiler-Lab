@@ -2,15 +2,17 @@ Program -> BlockItemList
 BlockItemList -> epsilon | BlockItemList BlockItem
 BlockItem -> Decl | Stmt
 Block -> { BlockItemList }  
-Type -> BaseType | BaseType *  
+Type -> BaseType | Type *  
 BaseType -> int | float | void  
-Decl -> Type id ;| Type id = Expr ; | Type id [ num ] ; | Type id ( ArgList ) Block
-ArgList -> epsilon | Arg ; ArgList
-Arg -> Type id | Type id [ ] | Type id ( )
+Decl -> Type id ;| Type id = Expr ; | Type id Dimensions ; | Type id ( ArgList ) Block
+Dimensions -> [ num ] | Dimensions [ num ]
+ArgList -> epsilon | Arg ; ArgList | Arg
+TypeList -> epsilon | Type , TypeList | Type
+Arg -> Type id | Type id [ ] | Type id ( TypeList )
 Stmt -> id = Expr ; | id [ Expr ] = Expr ; | if ( Bool ) Stmt | if ( Bool ) Stmt else Stmt | while ( Bool ) Stmt | return Expr ; | Block | id ( ParamList ) ; 
 Expr -> num | flo | & id | id | id [ Expr ] | * Expr | Expr + Expr | Expr * Expr | ( Expr ) | id ( ParamList )  
 Bool -> Expr rop Expr | Expr  
-ParamList -> epsilon | Param , ParamList
+ParamList -> epsilon | Param , ParamList | Param
 Param -> Expr | id [ ] | id ( ) //传入数组指针，函数指针
 //主要修改
 //不允许顶层出现stmt，不是python
