@@ -1,7 +1,10 @@
 #ifndef M_AST_PARAM_HEADER
 #define M_AST_PARAM_HEADER
-#include"AST/NodeType/ASTbaseType.h"
-#include"AST/NodeType/Expr.h"
+#include "AST/NodeType/ASTbaseType.h"
+//#include "AST/NodeType/Expr.h"
+#include "AST/NodeType/NodeBase.h"
+#include "lcmpfileio.h"
+#include <numeric>
 
 namespace AST
 {

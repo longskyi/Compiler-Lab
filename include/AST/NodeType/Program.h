@@ -1,10 +1,8 @@
 #ifndef M_AST_PROGRAM_TYPE_HEADER
 #define M_AST_PROGRAM_TYPE_HEADER
 #include"AST/NodeType/ASTbaseType.h"
-#include"AST/NodeType/Stmt.h"
-#include"AST/NodeType/Declare.h"
+#include "AST/NodeType/NodeBase.h"
 #include<vector>
-#include<variant>
 namespace AST
 {
 // Block -> { BlockItemList }  
@@ -16,32 +14,6 @@ class BlockItem;
 class Block;
 
 
-class Program : public ASTNode
-{
-private:
-    /* data */
-public:
-    unique_ptr<BlockItemList> ItemList;
-    static constexpr std::array<std::u8string_view,1> SupportProd=
-    {u8"Program -> BlockItemList"};
-    Program(/* args */);
-    ~Program();
-    static unique_ptr<ASTNode> try_constructS(ASTNode * as , AbstractSyntaxTree * astTree);
-    unique_ptr<ASTNode> try_construct(ASTNode * as , AbstractSyntaxTree * astTree) override {
-        return Program::try_constructS(as,astTree);
-    }
-    void accept(ASTVisitor& visitor) override;
-};
-
-inline Program::Program(/* args */)
-{
-    this->Ntype = ASTType::Program;
-    this->subType = ASTSubType::Program;
-}
-
-inline Program::~Program()
-{
-}
 
 //Block Item应当只在构建时临时出现，构建后不存在
 class BlockItem : public ASTNode
@@ -235,6 +207,34 @@ inline Block::Block(/* args */)
 }
 
 inline Block::~Block()
+{
+}
+
+
+class Program : public ASTNode
+{
+private:
+    /* data */
+public:
+    unique_ptr<BlockItemList> ItemList;
+    static constexpr std::array<std::u8string_view,1> SupportProd=
+    {u8"Program -> BlockItemList"};
+    Program(/* args */);
+    ~Program();
+    static unique_ptr<ASTNode> try_constructS(ASTNode * as , AbstractSyntaxTree * astTree);
+    unique_ptr<ASTNode> try_construct(ASTNode * as , AbstractSyntaxTree * astTree) override {
+        return Program::try_constructS(as,astTree);
+    }
+    void accept(ASTVisitor& visitor) override;
+};
+
+inline Program::Program(/* args */)
+{
+    this->Ntype = ASTType::Program;
+    this->subType = ASTSubType::Program;
+}
+
+inline Program::~Program()
 {
 }
 

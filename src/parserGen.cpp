@@ -1,7 +1,7 @@
 #include"SyntaxType.h"
 #include"stringUtil.h"
 #include"templateUtil.h"
-#include"fileIO.h"
+#include"lcmpfileio.h"
 #include<variant>
 #include<cassert>
 #include<iostream>

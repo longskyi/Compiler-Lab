@@ -1,6 +1,6 @@
 #ifndef M_AST_ARG_TYPE_HEADER
 #define M_AST_ARG_TYPE_HEADER
-#include"fileIO.h"
+#include"lcmpfileio.h"
 #include"AST/NodeType/ASTbaseType.h"
 
 

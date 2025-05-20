@@ -88,5 +88,11 @@
         "valarray": "cpp"
     },
     "C_Cpp.default.cppStandard": "c++23",
-    "C_Cpp.default.cStandard": "c23"
+    "C_Cpp.default.cStandard": "c23",
+    "editor.suggest.insertMode": "replace", // 补全时替换当前单词（类似 cpptools）
+    "[cpp]": {
+        "editor.tabCompletion": "onlySnippets" // 限制 Tab 仅用于补全
+    },
+
+
 }

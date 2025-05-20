@@ -1,9 +1,8 @@
-#include"fileIO.h"
+#include"lcmpfileio.h"
 #include"SyntaxType.h"
 #include"stringUtil.h"
 #include <fstream>
 #include <sstream>
-#include <algorithm>
 #include <filesystem>
 
 

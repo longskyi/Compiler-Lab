@@ -33,3 +33,6 @@
 
 [Bb]uild
 [Bb]in
+
+.cache
+.vscode

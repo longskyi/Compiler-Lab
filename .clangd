@@ -1,0 +1,17 @@
+InlayHints:
+  Enabled: Yes      # 保持行内提示功能
+  ParameterNames: No # 关闭参数名提示
+  DeducedTypes: Yes  # 可选：类型提示
+  Designators: Yes   # 可选：字段名提示
+
+Diagnostics:
+  UnusedIncludes: Strict  # 可选：Strict | None
+  Suppress: ["unused-includes"]  # 直接禁用该警告
+
+Completion:
+  AllScopes: Yes
+  ArgumentLists: None
+  
+
+CompileFlags:
+  Add: [-fcomplete-member-pointers]

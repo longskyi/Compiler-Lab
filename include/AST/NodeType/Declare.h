@@ -9,7 +9,6 @@
 namespace AST
 {
     
-class Declare : public ASTNode {};
 
 class IdDeclare : public Declare 
 {

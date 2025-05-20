@@ -10,7 +10,7 @@
 #include "lexer.h"
 #include"parserGen.h"
 #include"stringUtil.h"
-#include"fileIO.h"
+#include"lcmpfileio.h"
 
 #include"AST/NodeType/ASTbaseType.h"
 #include"AST/NodeType/Expr.h"

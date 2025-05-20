@@ -1,4 +1,6 @@
 #include "AST/AST.h"
+#include "AST/NodeType/ASTBool.h"
+#include "AST/NodeType/Stmt.h"
 #include "stringUtil.h"
 
 namespace AST
@@ -293,6 +295,22 @@ unique_ptr<ASTNode> AST_specified_node_construct(unique_ptr<NonTermProdNode> pro
     if(ret) { return ret; }
     ret = ArgList::try_constructS(prodNode.get(),ast_tree);
     if(ret) { return ret; }
+    ret = BlockStmt::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = Assign::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = Branch::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = Loop::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = FunctionCall::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = Return::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = ASTBool::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = Expr::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
     std::cerr <<"构造失败"<< toString_view(LCMPFileIO::formatProduction(ast_tree->Productions.at(prodNode->prodId),ast_tree->symtab));
     
     return nullptr;
@@ -346,7 +364,7 @@ void AST_test_main() {
         int c [10];
     }
     )";
-    auto ss2 = Lexer::scan(myprogram2);
+    auto ss2 = Lexer::scan(toU8str(myprogram));
     for(int i= 0 ;i < ss2.size() ; i++) {
         auto q = ss2[i];
         std::cout<<"["<<toString(q.type)<<" "<<toString(q.value)<<" "<<i<<"]";

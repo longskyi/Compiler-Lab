@@ -1,6 +1,8 @@
 #ifndef M_AST_ARG_HEADER
 #define M_AST_ARG_HEADER
 #include"AST/NodeType/ASTbaseType.h"
+#include "AST/NodeType/Type.h"
+#include "lcmpfileio.h"
 #include<memory>
 #include<vector>
 
