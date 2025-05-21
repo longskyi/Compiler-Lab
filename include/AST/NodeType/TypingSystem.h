@@ -257,7 +257,11 @@ public:
                 // 函数指针必须有 eType (返回类型) 且合法
                 // TypeList 中的每个参数类型必须合法
                 // 不能有 array_len
+                // 返回类型受限
                 if (eType == nullptr || !eType->check() || array_len != 0) {
+                    return false;
+                }
+                if(eType->sizeoff() > OS_PTR_SIZE) {
                     return false;
                 }
                 for (const auto& param : TypeList) {
@@ -271,7 +275,11 @@ public:
                 // 函数类型必须有 eType (返回类型) 且合法
                 // TypeList 中的每个参数类型必须合法
                 // 不能有 array_len
+                // 返回类型受限
                 if (eType == nullptr || !eType->check() || array_len != 0) {
+                    return false;
+                }
+                if(eType->sizeoff() > OS_PTR_SIZE) {
                     return false;
                 }
                 for (const auto& param : TypeList) {

@@ -10,7 +10,7 @@ class Expr : public ASTNode
 {
 public:
     static constexpr std::array<std::u8string_view,1> SupportProd=
-    {u8"Expr -> (Expr)"};
+    {u8"Expr -> ( Expr )"};
     Expr() {
         this->Ntype = ASTType::Expr;
         this->subType = ASTSubType::Expr;

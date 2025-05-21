@@ -73,11 +73,10 @@ public:
 
             auto newNode = std::make_unique<IdValueExpr>();
             
-            assert(dynamic_cast<TermSymNode *>(NonTnode->childs[0].get())->token_type == u8"ID" && "不是id类型节点");
+            assert(dynamic_cast<TermSymNode *>(NonTnode->childs[1].get())->token_type == u8"ID" && "不是id类型节点");
             newNode->id_ptr = std::make_unique<SymIdNode>();
-            newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[0].get())->value;
+            newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[1].get())->value;
 
-            newNode->subExpr.reset(static_cast<Expr *>(NonTnode->childs[2].release()));
             newNode->behave = IdValueBehave::ref;
 
             return newNode;

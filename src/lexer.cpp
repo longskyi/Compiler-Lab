@@ -36,6 +36,7 @@ const std::vector<token> skey =
     {"MUL","*"},
     {"DIV","/"},
     {"AND","&&"},
+    {"DEREF","&"},
     {"OR","||"},
     {"ROP","<"},
     {"ROP","<="},

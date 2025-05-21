@@ -94,7 +94,7 @@ public:
                     std::cout<<"    "; // 4 spaces
         };
         ptab(0);
-        out<<std::format("{}@Table\[\n",toString_view(tabletag));
+        out<<std::format("{}@Table[\n",toString_view(tabletag));
         ptab();
         out<<std::format("width:{} entryNum:{} alignment:{}\n",width,entries.size(),this->abi_alignment);
         for(int i = 0 ; i<entries.size();i++) {
@@ -620,7 +620,7 @@ inline bool parseExprCheck(AST::Expr * mainExpr_ptr , ExprTypeCheckMap & ExprMap
 }
 
 //不包含return检查
-inline bool parseStmtCheck(AST::Stmt * mainStmt_ptr, ExprTypeCheckMap & ExprMap ,ArgTypeCheckMap & ArgMap) {
+inline bool parseStmtCheck(AST::Stmt * mainStmt_ptr, ExprTypeCheckMap & ExprMap) {
     if(mainStmt_ptr == nullptr) {
         std::cout<<std::format("Stmt检查失败，空指针错误\n");
         return false;
@@ -743,13 +743,168 @@ inline bool parseStmtCheck(AST::Stmt * mainStmt_ptr, ExprTypeCheckMap & ExprMap 
     return true;
 }
 
-inline bool parseBoolCheck(AST::ASTBool * ASTbool_ptr) {
+inline bool parseBoolCheck(AST::ASTBool * ASTbool_ptr , ExprTypeCheckMap & ExprMap) {
     if(ASTbool_ptr == nullptr) {
         std::cout<<std::format("Bool检查失败，空指针错误\n");
         return false;
     }
+    
+    auto Lval = ASTbool_ptr->Lval_ptr.get();
+    auto& Lnode = ExprMap[Lval];
+    
+    // 1. 处理无比较运算符的情况（直接转换为bool）
+    if(ASTbool_ptr->rop == AST::NoneROP) {
+        Lnode.ret_is_left_value = false; // 作为条件表达式总是右值
+        
+        // 检查类型是否可转换为bool
+        switch(Lnode.retType.basicType) {
+            case AST::VOID:
+                std::cerr << std::format("错误：void类型不能转换为bool\n");
+                return false;
+            case AST::ARRAY:
+                // 数组退化为指针
+                Lnode.castType = Lnode.retType;
+                Lnode.castType.basicType = AST::BASE_PTR;
+                Lnode.castType.array_len = 0;
+                Lnode.cast_op = AST::ARRAY_TO_PTR;
+                break;
+            case AST::FUNC:
+                // 函数退化为函数指针
+                Lnode.castType = Lnode.retType;
+                Lnode.castType.basicType = AST::FUNC_PTR;
+                Lnode.cast_op = AST::FUNC_TO_PTR;
+                break;
+            default: // INT, FLOAT, PTR等类型可以直接作为bool
+                break;
+        }
+        return true;
+    }
+    
+    // 2. 处理有比较运算符的情况
+    auto Rval = ASTbool_ptr->Rval_ptr.get();
+    auto& Rnode = ExprMap[Rval];
+    
+    // 两边都不能是void
+    if(Lnode.retType.basicType == AST::VOID || Rnode.retType.basicType == AST::VOID) {
+        std::cerr << std::format("错误：void类型不能参与比较\n");
+        return false;
+    }
+    
+    // 处理数组退化
+    if(Lnode.retType.basicType == AST::ARRAY) {
+        Lnode.castType = Lnode.retType;
+        Lnode.castType.basicType = AST::BASE_PTR;
+        Lnode.castType.array_len = 0;
+        Lnode.cast_op = AST::ARRAY_TO_PTR;
+    }
+    if(Rnode.retType.basicType == AST::ARRAY) {
+        Rnode.castType = Rnode.retType;
+        Rnode.castType.basicType = AST::BASE_PTR;
+        Rnode.castType.array_len = 0;
+        Rnode.cast_op = AST::ARRAY_TO_PTR;
+    }
+    
+    // 处理函数退化
+    if(Lnode.retType.basicType == AST::FUNC) {
+        Lnode.castType = Lnode.retType;
+        Lnode.castType.basicType = AST::FUNC_PTR;
+        Lnode.cast_op = AST::FUNC_TO_PTR;
+    }
+    if(Rnode.retType.basicType == AST::FUNC) {
+        Rnode.castType = Rnode.retType;
+        Rnode.castType.basicType = AST::FUNC_PTR;
+        Rnode.cast_op = AST::FUNC_TO_PTR;
+    }
+    
+    // 获取实际比较类型（考虑可能的转换后类型）
+    const auto& Ltype = (Lnode.cast_op != AST::NO_OP) ? Lnode.castType : Lnode.retType;
+    const auto& Rtype = (Rnode.cast_op != AST::NO_OP) ? Rnode.castType : Rnode.retType;
+    
+    // 检查类型是否可比较
+    if(Ltype.basicType == AST::FLOAT || Rtype.basicType == AST::FLOAT) {
+        // 涉及float的比较
+        if(Ltype.basicType != AST::FLOAT && Ltype.basicType != AST::INT) {
+            std::cerr << std::format("错误：类型{}不能与float比较\n", toString_view(Ltype.format()));
+            return false;
+        }
+        if(Rtype.basicType != AST::FLOAT && Rtype.basicType != AST::INT) {
+            std::cerr << std::format("错误：类型{}不能与float比较\n", toString_view(Rtype.format()));
+            return false;
+        }
+        
+        // 需要int转float
+        if(Ltype.basicType == AST::INT) {
+            Lnode.castType.basicType = AST::FLOAT;
+            Lnode.cast_op = AST::INT_TO_FLOAT;
+        }
+        if(Rtype.basicType == AST::INT) {
+            Rnode.castType.basicType = AST::FLOAT;
+            Rnode.cast_op = AST::INT_TO_FLOAT;
+        }
+    } 
+    else if(Ltype.basicType == AST::BASE_PTR || Rtype.basicType == AST::BASE_PTR) {
+        // 指针比较
+        if(Ltype.basicType != AST::BASE_PTR || Rtype.basicType != AST::BASE_PTR) {
+            std::cerr << std::format("错误：指针只能与指针比较\n");
+            return false;
+        }
+        
+        // 检查指针类型是否兼容
+        if(!AST::SymType::equals(Ltype, Rtype)) {
+            std::cerr << std::format("错误：不兼容的指针类型比较: {} 和 {}\n", 
+                toString_view(Ltype.format()), toString_view(Rtype.format()));
+            return false;
+        }
+    }
+    else if(Ltype.basicType != Rtype.basicType) {
+        std::cerr << std::format("错误：不兼容的类型比较: {} 和 {}\n", 
+            toString_view(Ltype.format()), toString_view(Rtype.format()));
+        return false;
+    }
+    
+    // 标记为右值
+    Lnode.ret_is_left_value = false;
+    Rnode.ret_is_left_value = false;
+    
     return true;
 }
+
+inline bool parseReturnCheck(AST::Return * return_ptr , SemanticSymbolTable * rootTable ,AST::FuncDeclare * func_ptr, ExprTypeCheckMap & ExprMap) {
+    auto & funcName = func_ptr->id_ptr->Literal;
+    auto Se_ptr = rootTable->lookup(funcName);
+    if(Se_ptr == nullptr) {
+        std::cerr<<"函数return检查失败 损坏的符号表\n";
+        return false;
+    }
+    auto retType = *Se_ptr->Type.eType.get();
+    if(!return_ptr->expr_ptr.has_value()) {
+        if(retType.basicType != AST::baseType::VOID) {
+            std::cerr<<"函数返回值与声明不符，不为空\n";
+            return false;
+        }
+        return true;
+    }
+    else {
+        auto ExprType = ExprMap.at(return_ptr->expr_ptr.value().get()).retType;
+        auto [cast_op,msg] = ExprType.cast_to(&retType);
+        if(cast_op == AST::CAST_OP::INVALID) {
+            std::cerr<<std::format("return Expr，类型转换失败，源类型{}，无法转换成{}\n",
+                toString_view(ExprType.format()),
+                toString_view(retType.format())
+            );
+            return false;
+        }
+        else {
+            if(!msg.empty()) {
+                std::cerr<<"类型转换警告："<<toString_view(msg)<<std::endl;
+            }
+            ExprMap.at(return_ptr->expr_ptr.value().get()).castType = retType;
+            ExprMap.at(return_ptr->expr_ptr.value().get()).cast_op = cast_op;
+            return true;
+        }
+    }
+}   
+
 
 //主要工作：计算每个Expr返回类型，记录是否是左值 检查ArithExpr
 
@@ -758,13 +913,12 @@ public:
     SemanticSymbolTable * rootTable;
     SemanticSymbolTable * currentTable;
     std::stack<AST::ASTNode *> ASTstack;
+    std::stack<AST::FuncDeclare *> FuncStack;
     ExprTypeCheckMap ExprMap;
-    ArgTypeCheckMap ArgMap;
     bool gotERROR = false;
     std::u8string ERRORstr;
     bool build(SemanticSymbolTable * symtab , AST::AbstractSyntaxTree * tree) {
         ExprMap.clear();
-        ArgMap.clear();
         rootTable = symtab;
         currentTable = symtab;
         tree->root->accept(*this);
@@ -777,6 +931,9 @@ public:
     inline void enter(AST::ASTNode * node) override{
         if(gotERROR) { return; }
         ASTstack.push(node);
+        if(node->subType == AST::ASTSubType::FuncDeclare) {
+            FuncStack.push(static_cast<AST::FuncDeclare *>(node) );
+        }
         return;
     }
     inline void visit(AST::ASTNode * node) override {
@@ -785,8 +942,11 @@ public:
             parseExprCheck(static_cast<AST::Expr *>(node),ExprMap);
         }
         if(node->Ntype == AST::ASTType::Stmt) {
-            parseStmtCheck(static_cast<AST::Stmt *>(node),ExprMap,ArgMap);
+            parseStmtCheck(static_cast<AST::Stmt *>(node),ExprMap);
         }
+        if(node->Ntype == AST::ASTType::ASTBool) {
+            parseBoolCheck(static_cast<AST::ASTBool *>(node),ExprMap);
+        }   
     }
     inline void quit(AST::ASTNode * node) override {
         if(ASTstack.empty()) {
@@ -796,7 +956,12 @@ public:
         }
         ASTstack.pop();
         if(ASTstack.empty()) return;
-
+        if(node->subType == AST::ASTSubType::Return) {
+            parseReturnCheck(static_cast<AST::Return *>(node),rootTable,FuncStack.top(),ExprMap);
+        }
+        if(node->subType == AST::ASTSubType::FuncDeclare) {
+            FuncStack.pop();
+        }
         auto parent = ASTstack.top();
     }
 };
@@ -910,8 +1075,14 @@ inline void test_Semantic_main() {
     }
     int main(int p;float L) {
         int a = 200 * 4.11111;
-        
+        int * refa = &a;
+        *refa = 4.2;
+        *(a + 1) = 5;
         int q = 4;
+        if(4 <= 3) {
+            int b = 8;
+            b = 12 + 20;
+        }
         {
             int q = 20 + 14;
             q = 20.2;
@@ -936,15 +1107,17 @@ inline void test_Semantic_main() {
     ASTContentVisitor v2;
     AST::ConstantFoldingVisitor v3;
     Semantic::SymbolTableBuildVisitor v4;
+    Semantic::TypingCheckVisitor v5;
+    SemanticSymbolTable tmp;
     //v2.moveSequence = true;
     astT.root->accept(v3);
     astT.root->accept(v2);
-    SemanticSymbolTable tmp;
+    
     v4.build(&tmp,&astT);
     tmp.printTable();
     tmp.checkTyping();
     astT.root->accept(v2);
-    TypingCheckVisitor v5;
+    
     v5.build(&tmp,&astT);
     return;
     
