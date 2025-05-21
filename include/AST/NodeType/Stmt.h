@@ -220,7 +220,7 @@ public:
             auto newNode = std::make_unique<FunctionCall>();
             
             newNode->id_ptr = std::make_unique<SymIdNode>();
-            newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[1].get())->value;
+            newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[0].get())->value;
             newNode->paramList_ptr.reset(static_cast<ParamList*>(NonTnode->childs[2].release()));
             
             return newNode;
@@ -248,7 +248,7 @@ class Return : public Stmt
 public:
     std::optional<unique_ptr<Expr>> expr_ptr;
     static constexpr std::array<std::u8string_view,2> SupportProd=
-    {u8"Stmt -> return Expr ;",u8"return ;"};
+    {u8"Stmt -> return Expr ;",u8"Stmt -> return ;"};
     Return() {
         this->Ntype = ASTType::Stmt;
         this->subType = ASTSubType::Return;

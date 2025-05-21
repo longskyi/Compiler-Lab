@@ -2,6 +2,7 @@
 #define M_AST_ARG_HEADER
 #include"AST/NodeType/ASTbaseType.h"
 #include "AST/NodeType/Type.h"
+#include "AST/NodeType/NodeBase.h"
 #include "lcmpfileio.h"
 #include<memory>
 #include<vector>
@@ -16,7 +17,7 @@ public:
     SymType argtype;
     unique_ptr<SymIdNode> id_ptr;
     static constexpr std::array<std::u8string_view,3> SupportProd=
-    {u8"Arg -> Type id",u8"Arg -> Type id [ ]",u8"Arg -> Type id ( TypeList )"};
+    {u8"Arg -> Type id",u8"Arg -> Type id [ ] Dimensions",u8"Arg -> Type id ( TypeList )"};
     inline Arg() {
         this->Ntype = ASTType::Arg;
         this->subType = ASTSubType::Arg;
@@ -58,15 +59,20 @@ public:
         }
         case 1:
         {
-            //Type id [ ] 
-            assert(NonTnode->childs.size() == 4);
+            //Type id [ ] Dimensions
+            assert(NonTnode->childs.size() == 5);
             assert(dynamic_cast<pType *>(NonTnode->childs[0].get()) && "是基本类型节点");
             assert(dynamic_cast<TermSymNode*>(NonTnode->childs[1].get()));
             assert(dynamic_cast<TermSymNode*>(NonTnode->childs[1].get())->token_type == u8"ID");
+            assert(dynamic_cast<Dimensions *>(NonTnode->childs[4].get()) && "是基本类型节点");
             auto newNode = std::make_unique<Arg>();
             newNode->argtype = std::move((static_cast<pType*>(NonTnode->childs[0].get()))->type);
             newNode->id_ptr = std::make_unique<SymIdNode>();
             newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[1].get())->value;
+            const auto& dims = static_cast<Dimensions*>(NonTnode->childs[4].get())->array_len_vec;
+            for (int i = dims.size() - 1; i >= 0; --i) {
+                newNode->argtype.makeArray(dims[i]);
+            }
             newNode->argtype.makePtr();
             return newNode;
         }

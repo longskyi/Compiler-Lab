@@ -60,7 +60,7 @@ enum class ASTSubType {
     DerefExpr,
     CallExpr,
     ArithExpr,
-    RightValueExpr,
+    IdValueExpr,
 
     ArgList,
     Arg,

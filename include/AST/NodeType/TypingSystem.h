@@ -293,17 +293,16 @@ public:
         }
     }
     inline ~SymType(){}
-    inline std::optional<SymType> deref() {
-        if(this->basicType != BASE_PTR) {
-            return std::nullopt;
-        }
-        return SymType(*this->eType);
-    }
     inline void makePtr() {
         auto NewEtype = std::make_unique<SymType>(std::move(*this));
         this->eType = std::move(NewEtype);
         this->TypeList.clear();
-        this->basicType = BASE_PTR;
+        if(this->eType->basicType == FUNC) {
+            this->basicType = FUNC_PTR;
+        }   
+        else {
+            this->basicType = BASE_PTR;
+        }
     }
     inline void makeFuncPtr(const std::vector<SymType >& TypeList_) {
         auto NewEtype = std::make_unique<SymType>(std::move(*this));
@@ -506,7 +505,7 @@ public:
             }
             for (size_t i = 0; i < TypeList.size(); ++i) {
                 if (!equals(*TypeList[i], *target->TypeList[i])) {  // 参数类型必须完全匹配
-                    return {INVALID, u8"第" + toU8str(i+1) + u8"个形参类型不匹配"};
+                    return {INVALID, toU8str(std::format("第{}个形参类型不匹配",i+1))};
                 }
             }
 

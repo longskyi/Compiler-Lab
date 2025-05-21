@@ -37,28 +37,28 @@ unique_ptr<ASTNode> Param::try_constructS(ASTNode * as , AbstractSyntaxTree * as
         newNode->op = ParamOp::expr;
         return newNode;
     }
-    case 1:
-    {
-        // id [ ]
-        assert(NonTnode->childs.size() == 1);
-        assert(dynamic_cast<SymIdNode *>(NonTnode->childs[0].get()) && "不是sym类型节点");
+    // case 1:
+    // {
+    //     // id [ ]
+    //     assert(NonTnode->childs.size() == 1);
+    //     assert(dynamic_cast<SymIdNode *>(NonTnode->childs[0].get()) && "不是sym类型节点");
 
-        auto newNode = std::make_unique<Param>();
-        newNode->id_ptr.reset(static_cast<SymIdNode *>(NonTnode->childs[0].release()));
-        newNode->op = ParamOp::ARRAY_PTRP;
-        return newNode;
-    }
-    case 2:
-    {
-        // id ( )
-        assert(NonTnode->childs.size() == 1);
-        assert(dynamic_cast<SymIdNode *>(NonTnode->childs[0].get()) && "不是sym类型节点");
+    //     auto newNode = std::make_unique<Param>();
+    //     newNode->id_ptr.reset(static_cast<SymIdNode *>(NonTnode->childs[0].release()));
+    //     newNode->op = ParamOp::ARRAY_PTRP;
+    //     return newNode;
+    // }
+    // case 2:
+    // {
+    //     // id ( )
+    //     assert(NonTnode->childs.size() == 1);
+    //     assert(dynamic_cast<SymIdNode *>(NonTnode->childs[0].get()) && "不是sym类型节点");
 
-        auto newNode = std::make_unique<Param>();
-        newNode->id_ptr.reset(static_cast<SymIdNode *>(NonTnode->childs[0].release()));
-        newNode->op = ParamOp::FUNC_PTRP;
-        return newNode;
-    }
+    //     auto newNode = std::make_unique<Param>();
+    //     newNode->id_ptr.reset(static_cast<SymIdNode *>(NonTnode->childs[0].release()));
+    //     newNode->op = ParamOp::FUNC_PTRP;
+    //     return newNode;
+    // }
     default:
         std::cerr <<"Not implement Param Node :"<< targetProd<<std::endl;
         return nullptr;

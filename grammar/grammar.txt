@@ -8,7 +8,7 @@ Decl -> Type id ;| Type id = Expr ; | Type id Dimensions ; | Type id ( ArgList )
 Dimensions -> [ num ] | Dimensions [ num ]
 ArgList -> epsilon | Arg ; ArgList | Arg
 TypeList -> epsilon | Type , TypeList | Type
-Arg -> Type id | Type id [ ] | Type id ( TypeList )
+Arg -> Type id | Type id [ ] Dimensions | Type id ( TypeList )
 Stmt -> id = Expr ; | Expr = Expr ; | if ( Bool ) Stmt | if ( Bool ) Stmt else Stmt | while ( Bool ) Stmt | return Expr ; | Block | id ( ParamList ) ; | return ;
 Expr -> num | flo | & id | id | Expr [ Expr ] | * Expr | Expr + Expr | Expr * Expr | ( Expr ) | id ( ParamList )  
 Bool -> Expr rop Expr | Expr  

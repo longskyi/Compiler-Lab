@@ -12,20 +12,24 @@ namespace AST
 
 
 
-enum RightValueBehave {
-    NO_INIT,
-    ref,
+enum IdValueBehave {
+    id_behave_none_init,
     direct,
+    ref,
 };
 
 class IdValueExpr : public Expr
 {
 public:
-    RightValueBehave behave;
+    IdValueBehave behave = id_behave_none_init;
     unique_ptr<SymIdNode> id_ptr;
     unique_ptr<Expr> subExpr = nullptr;
     static constexpr std::array<std::u8string_view,2> SupportProd=
     {u8"Expr -> id ", u8"Expr -> & id"};
+    IdValueExpr() {
+        this->Ntype = ASTType::Expr;
+        this->subType = ASTSubType::IdValueExpr;
+    }
     inline static unique_ptr<ASTNode> try_constructS(ASTNode * as , AbstractSyntaxTree * astTree) {
         auto * NonTnode = dynamic_cast<NonTermProdNode *>(as);
         if(!NonTnode) {
@@ -57,7 +61,7 @@ public:
             assert(dynamic_cast<TermSymNode *>(NonTnode->childs[0].get())->token_type == u8"ID" && "不是id类型节点");
             newNode->id_ptr = std::make_unique<SymIdNode>();
             newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[0].get())->value;
-            newNode->behave = RightValueBehave::direct;
+            newNode->behave = IdValueBehave::direct;
 
             return newNode;
         }
@@ -74,7 +78,7 @@ public:
             newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[0].get())->value;
 
             newNode->subExpr.reset(static_cast<Expr *>(NonTnode->childs[2].release()));
-            newNode->behave = RightValueBehave::ref;
+            newNode->behave = IdValueBehave::ref;
 
             return newNode;
         }

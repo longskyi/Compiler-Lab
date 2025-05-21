@@ -38,7 +38,7 @@ const char* ASTSubTypeToString(ASTSubType subtype) {
         case ASTSubType::DerefExpr: return "DerefExpr";
         case ASTSubType::CallExpr: return "CallExpr";
         case ASTSubType::ArithExpr: return "ArithExpr";
-        case ASTSubType::RightValueExpr: return "RightValueExpr";
+        case ASTSubType::IdValueExpr: return "IdValueExpr";
         case ASTSubType::ArgList: return "ArgList";
         case ASTSubType::Arg: return "Arg";
         case ASTSubType::ASTBool: return "ASTBool";
