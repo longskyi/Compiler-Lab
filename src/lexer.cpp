@@ -175,13 +175,13 @@ void insert_num()
     {
         move[add][i] = mNUM;
     }
-    move[mSTART]['-'] = avai_node;
+    state negN = move[mSTART]['-'] = avai_node;
     nodes[avai_node].acce = false;
     nodes[avai_node].type = "";
     avai_node++;
     for(int i = '0';i<='9';i++)
     {
-        move[avai_node][i] = mNUM;
+        move[negN][i] = mNUM;
         move[mNUM][i] = mNUM;
     }
     nodes[mNUM].acce = true;

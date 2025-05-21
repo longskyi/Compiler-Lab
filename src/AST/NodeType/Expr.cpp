@@ -78,6 +78,22 @@ unique_ptr<ASTNode> DerefExpr::try_constructS(ASTNode * as , AbstractSyntaxTree 
         newNode->subExpr.reset(static_cast<Expr *>(NonTnode->childs[1].release()));
         return newNode;
     }
+    case 1:
+    {
+        // Expr [ Expr ]
+        assert(NonTnode->childs.size() == 4);
+        assert(dynamic_cast<Expr *>(NonTnode->childs[0].get()) && "不是Expr类型节点");
+        assert(dynamic_cast<Expr *>(NonTnode->childs[2].get()) && "不是Expr类型节点");
+        
+        auto arithNode = std::make_unique<ArithExpr>();
+        arithNode->Op = ADD;
+        arithNode->Lval_ptr.reset(static_cast<Expr *>(NonTnode->childs[0].release()));
+        arithNode->Rval_ptr.reset(static_cast<Expr *>(NonTnode->childs[2].release()));
+
+        auto newNode = std::make_unique<DerefExpr>();
+        newNode->subExpr = std::move(arithNode);
+        return newNode;
+    }
     default:
         std::cerr <<"Not implement Expr Node :"<< targetProd<<std::endl;
         return nullptr;

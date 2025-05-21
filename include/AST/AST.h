@@ -69,7 +69,7 @@ public:
         if(dynamic_cast<SymIdNode *>(node)) {
             std::cout<<" ";
             auto eptr = static_cast<SymIdNode *>(node);
-            std::cout<<toString_view(eptr->Literal);
+            std::cout<<toString_view(eptr->Literal)<<" ";
             
         }
         std::cout<<std::endl;
@@ -180,8 +180,8 @@ public:
         }
         else if(dynamic_cast<Assign *>(parent)) {
             auto assign = static_cast<Assign *>(parent);
-            if(assign->expr_ptr.get() == arithExpr_ptr) {
-                assign->expr_ptr.reset(static_cast<Expr *>(newNode.release()));
+            if(assign->Rexpr_ptr.get() == arithExpr_ptr) {
+                assign->Rexpr_ptr.reset(static_cast<Expr *>(newNode.release()));
             } else {
                 std::cerr<<"常量折叠碰到 奇怪的AST树栈结构"<<std::endl;
             }

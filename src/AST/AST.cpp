@@ -279,7 +279,7 @@ unique_ptr<ASTNode> AST_specified_node_construct(unique_ptr<NonTermProdNode> pro
     if(ret) { return ret; }
     ret = FuncDeclare::try_constructS(prodNode.get(),ast_tree);
     if(ret) { return ret; }
-    ret = RightValueExpr::try_constructS(prodNode.get(),ast_tree);
+    ret = IdValueExpr::try_constructS(prodNode.get(),ast_tree);
     if(ret) { return ret; }
     ret = DerefExpr::try_constructS(prodNode.get(),ast_tree);
     if(ret) { return ret; }

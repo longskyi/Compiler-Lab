@@ -9,8 +9,8 @@ Dimensions -> [ num ] | Dimensions [ num ]
 ArgList -> epsilon | Arg ; ArgList | Arg
 TypeList -> epsilon | Type , TypeList | Type
 Arg -> Type id | Type id [ ] | Type id ( TypeList )
-Stmt -> id = Expr ; | id [ Expr ] = Expr ; | if ( Bool ) Stmt | if ( Bool ) Stmt else Stmt | while ( Bool ) Stmt | return Expr ; | Block | id ( ParamList ) ; 
-Expr -> num | flo | & id | id | id [ Expr ] | * Expr | Expr + Expr | Expr * Expr | ( Expr ) | id ( ParamList )  
+Stmt -> id = Expr ; | Expr = Expr ; | if ( Bool ) Stmt | if ( Bool ) Stmt else Stmt | while ( Bool ) Stmt | return Expr ; | Block | id ( ParamList ) ; | return ;
+Expr -> num | flo | & id | id | Expr [ Expr ] | * Expr | Expr + Expr | Expr * Expr | ( Expr ) | id ( ParamList )  
 Bool -> Expr rop Expr | Expr  
 ParamList -> epsilon | Param , ParamList | Param
 Param -> Expr | id [ ] | id ( ) //传入数组指针，函数指针
@@ -19,3 +19,4 @@ Param -> Expr | id [ ] | id ( ) //传入数组指针，函数指针
 //支持basetype指针
 //统一DeclList和StmtList，支持Block级实现
 //简化设计，保留ParamList和ArgList的尾符号
+//Expr [ Expr ] == *(Expr + Expr)

@@ -6,6 +6,8 @@
 #include <memory>
 #include <vector>
 #include <stack>
+#include<unordered_map>
+#include<unordered_set>
 #include "AST/AST.h"
 
 namespace Semantic {
@@ -40,6 +42,22 @@ public:
     //该函数不进行检查
     inline void add_entry(unique_ptr<SymbolEntry> entry) noexcept {
         entries.emplace_back(std::move(entry));
+    }
+    inline bool checkTyping() {
+        bool ret = true;
+        for(const auto & et : entries) {
+            if(et->is_block) {
+                ret = ret && et->subTable->checkTyping();
+            }
+            else if(et->Type.basicType == AST::FUNC) {
+                ret =  ret && et->subTable->checkTyping();
+            }
+            else if(!et->Type.check()) {
+                std::cerr<<"Symbol:"<<toString_view(et->symbolName)<<"不合法的类型"<<toString_view(et->Type.format())<<std::endl;
+                ret = false;
+            }
+        }
+        return ret;
     }
     inline void allocMem() {
         //填充offset和size字段
@@ -85,11 +103,11 @@ public:
                 out<<std::format("(type: block)\n");
                 entries[i]->subTable->printTable(depth+1);
             } else if(entries[i]->Type.basicType == AST::FUNC) {
-                out<<std::format("(name:{},type: FUNC[{}])\n",toString_view(entries[i]->symbolName),toString_view(entries[i]->Type.format()));
+                out<<std::format("(name:{},uniqueId:{},type: FUNC[{}])\n",toString_view(entries[i]->symbolName),size_t(entries[i]->symid),toString_view(entries[i]->Type.format()));
                 entries[i]->subTable->printTable(depth+1);
             }
             else {
-                out<<std::format("(name:{},type:{},sizeof:{})\n",toString_view(entries[i]->symbolName),toString_view(entries[i]->Type.format()),entries[i]->Type.sizeoff());
+                out<<std::format("(name:{},uniqueId:{},type:{},sizeof:{})\n",toString_view(entries[i]->symbolName),size_t(entries[i]->symid),toString_view(entries[i]->Type.format()),entries[i]->Type.sizeoff());
             }
         }
         ptab(0);
@@ -114,12 +132,15 @@ public:
     void enter(AST::ASTNode* node) {
         if(gotError) return;
         if(dynamic_cast<AST::FuncDeclare *>(node)) {
+            if(currentTable->outer != nullptr) {
+                std::cerr<<std::format("在函数内定义函数未受支持\n");
+                gotError = true;
+            }
             auto funcD_ptr = static_cast<AST::FuncDeclare *>(node);
             if(currentTable->lookupInner(funcD_ptr->id_ptr->Literal)) {
                 std::cerr<<toString_view(funcD_ptr->id_ptr->Literal)<<"多重定义错误"<<std::endl;
                 gotError = true;
             }
-            defineStack.push(node);
             if(!funcD_ptr) {
                 std::cerr<<"函数-block定义栈结构损坏"<<std::endl;
                 gotError = true;
@@ -135,8 +156,8 @@ public:
             currentTable->add_entry(std::move(entry_ptr));
             currentTable = table_ptr.get();
             tmp_ptr->subTable = std::move(table_ptr);
+            funcD_ptr->id_ptr->symEntryPtr = tmp_ptr;
             InnerState = 1;
-            return;
         }
         if(dynamic_cast<AST::Block *>(node)) {
             if(InnerState == 1) {
@@ -162,9 +183,9 @@ public:
             } else {
                 std::cerr<<"Inner ERROR Not Implement states"<<std::endl;
             }
-            defineStack.push(node);
-            return;
         }
+
+        defineStack.push(node);
     }
     int InnerState = 0;
     void visit(AST::ASTNode* node) {
@@ -179,6 +200,7 @@ public:
                 auto entry_ptr = std::make_unique<SymbolEntry>();
                 entry_ptr->symbolName = idDecl_ptr->id_ptr->Literal;
                 entry_ptr->Type = idDecl_ptr ->id_type;
+                idDecl_ptr->id_ptr->symEntryPtr = entry_ptr.get();
                 currentTable->add_entry(std::move(entry_ptr));
             }
         }
@@ -192,34 +214,49 @@ public:
                 auto entry_ptr = std::make_unique<SymbolEntry>();
                 entry_ptr->symbolName = arg_ptr->id_ptr->Literal;
                 entry_ptr->Type = arg_ptr->argtype;
+                arg_ptr->id_ptr->symEntryPtr = entry_ptr.get();
                 currentTable->add_entry(std::move(entry_ptr));
             }
         }
     }
     void quit(AST::ASTNode* node) {
         if(gotError) return;
+        if(defineStack.empty()) {
+            std::cerr<<"符号表生成 栈深度结构损坏"<<std::endl;
+            gotError = true;
+            return;
+        }
+        defineStack.pop();
+        if(dynamic_cast<AST::SymIdNode *>(node)) {
+            auto idNode = static_cast<AST::SymIdNode *>(node);
+            auto parent = defineStack.top();
+            //进行符号查询绑定的id，其父节点为 Expr或 Stmt
+            if(dynamic_cast<AST::Expr *>(parent)) {
+                auto Se = currentTable->lookup(idNode->Literal);
+                if(Se == nullptr) {
+                    std::cerr<<std::format("未定义符号{}\n",toString_view(idNode->Literal));
+                    gotError = true;
+                    return;
+                }
+                idNode->symEntryPtr = Se;
+            }   
+            else if(dynamic_cast<AST::Stmt *>(parent)) {
+                auto Se = currentTable->lookup(idNode->Literal);
+                if(Se == nullptr) {
+                    std::cerr<<std::format("未定义符号{}\n",toString_view(idNode->Literal));
+                    gotError = true;
+                    return;
+                }
+                idNode->symEntryPtr = Se;
+            }
+        }
         if(dynamic_cast<AST::Block *>(node)) {
             if(defineStack.empty()) {
                 std::cerr<<"符号表生成 栈结构损坏"<<std::endl;
                 gotError = true;
                 return;
             }
-            defineStack.pop();
-            if(!currentTable->outer) {
-                std::cerr<<"符号表生成 符号表栈深度损坏"<<std::endl;
-                gotError = true;
-                return;
-            }
             currentTable = currentTable->outer;
-            return;
-        }
-        if(dynamic_cast<AST::FuncDeclare *>(node)) {
-            if(defineStack.empty()) {
-                std::cerr<<"符号表生成 栈结构损坏"<<std::endl;
-                gotError = true;
-                return;
-            }
-            defineStack.pop();
         }
     }
 
@@ -245,12 +282,119 @@ public:
     }
 };
 
-class SymBindVisitor {
+//类型检查
+
+
+
+//类型检查生成的节点内容
+struct TypingCheckNode {
+    AST::SymType retType;
+    AST::CAST_OP cast_op = AST::NO_OP;
+    AST::SymType castType;
+    bool is_left_value = false;
+    int helpNum1 = 0;
+    int helpNum2 = 0;
+    void * otherContent = nullptr;
+};
+
+using ExprTypeCheckMap = std::unordered_map<AST::Expr *,TypingCheckNode>;
+using ArgTypeCheckMap = std::unordered_map<AST::Arg *,TypingCheckNode>;
+
+//主要工作：计算每个Expr返回类型，记录是否是左值 检查ArithExpr
+
+class TypingCheckVisitor : public AST::ASTVisitor {
 public:
     SemanticSymbolTable * rootTable;
     SemanticSymbolTable * currentTable;
+    std::stack<AST::ASTNode *> ASTstack;
+    bool gotERROR;
+    std::u8string ERRORstr;
+    bool build(SemanticSymbolTable * symtab , AST::AbstractSyntaxTree * tree) {
+        return false;
+    }
     
+    inline void enter(AST::ASTNode * node) override{
+        if(gotERROR) { return; }
+        ASTstack.push(node);
+        return;
+    }
+    inline void visit(AST::ASTNode * node) override {
+        if(gotERROR) { return; }
+    }
+    inline void quit(AST::ASTNode * node) override {
+        if(ASTstack.empty()) {
+            gotERROR = true;
+            ERRORstr = u8"Visitor AST栈深度结构损坏";
+            return;
+        }
+        ASTstack.pop();
+        if(ASTstack.empty()) return;
+
+        auto parent = ASTstack.top();
+    }
 };
+
+class ASTContentVisitor : public AST::ASTVisitor {
+int depth = 0;
+public:
+    bool moveSequence = false;
+
+    inline void print(AST::ASTNode * node) {
+    std::cout<<ASTSubTypeToString(node->subType);
+        if(dynamic_cast<AST::ArithExpr *>(node)) {
+            auto eptr = static_cast<AST::ArithExpr *>(node);
+            if(eptr->Op == AST::BinaryOpEnum::ADD) {
+                std::cout<<" +";
+            } else if(eptr->Op == AST::BinaryOpEnum::MUL) {
+                std::cout<<" *";
+            }
+        }
+        if(dynamic_cast<AST::ConstExpr *>(node)) {
+            std::cout<<" ";
+            auto eptr = static_cast<AST::ConstExpr *>(node);
+            auto v = eptr->value;
+            auto visitors = overload {
+                [](int v) {std::cout<<v;},
+                [](float v) {std::cout<<v;},
+                [](uint64_t v) {std::cout<<v;},
+            };
+            std::visit(visitors,v);
+        }
+        if(dynamic_cast<AST::SymIdNode *>(node)) {
+            std::cout<<" ";
+            auto eptr = static_cast<AST::SymIdNode *>(node);
+            std::cout<<toString_view(eptr->Literal)<<" ";
+            if(eptr->symEntryPtr) {
+                std::cout<<static_cast<SymbolEntry*>(eptr->symEntryPtr)->symid<<" ";
+            }
+            
+        }
+        std::cout<<std::endl;
+    }
+
+    virtual void visit(AST::ASTNode* node) {
+        if(moveSequence) {
+            this->print(node); 
+        }
+        return;
+    }
+    inline virtual void enter(AST::ASTNode* node) {
+        
+        if(!moveSequence) {
+            for(int i = 0 ;i <depth;i++) {
+                std::cout<<" ";
+            }
+            this->print(node); 
+        }
+        depth++;
+        return;
+    }
+    inline virtual void quit(AST::ASTNode* node) {
+        depth--;
+        return;
+    }
+};
+
 
 inline void test_Semantic_main() {
     auto astbase = parserGen(
@@ -296,14 +440,17 @@ inline void test_Semantic_main() {
     float **** b;
     int main(int p;int L) {
         int a = 200 * 4.11111;
+        
         int q = 4;
         {
             int q = 20 + 14;
-            hey = 20;
+            q = 20;
         }
+        q = 20;
         a = 16 * 5 + 8;
         int b = 8;
-        int c [10][20][30][40];
+        int c [-5][20][30][40];
+        c[0][0][0][0] = 0;
     }
     float q = 4.2;
     int main2() {
@@ -317,7 +464,7 @@ inline void test_Semantic_main() {
     }
     std::cout<<std::endl;
     astT.BuildSpecifiedAST(ss2);
-    AST::ASTEnumTypeVisitor v2;
+    ASTContentVisitor v2;
     AST::ConstantFoldingVisitor v3;
     Semantic::SymbolTableBuildVisitor v4;
     //v2.moveSequence = true;
@@ -325,8 +472,9 @@ inline void test_Semantic_main() {
     astT.root->accept(v2);
     SemanticSymbolTable tmp;
     v4.build(&tmp,&astT);
-    int a =4;
     tmp.printTable();
+    tmp.checkTyping();
+    astT.root->accept(v2);
     return;
     
 }

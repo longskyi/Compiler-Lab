@@ -81,10 +81,11 @@ public :
 class Assign : public Stmt 
 {
 public :
-    static constexpr std::array<std::u8string_view,1> SupportProd=
-    {u8"Stmt -> id = Expr ;"};
-    unique_ptr<SymIdNode> id_ptr;
-    unique_ptr<Expr> expr_ptr;
+    static constexpr std::array<std::u8string_view,2> SupportProd=
+    {u8"Stmt -> id = Expr ;",u8"Stmt -> Expr = Expr ; "};
+    unique_ptr<SymIdNode> id_ptr = nullptr;
+    unique_ptr<Expr> Lexpr_ptr = nullptr;
+    unique_ptr<Expr> Rexpr_ptr;
     inline Assign() {
         this->Ntype = ASTType::Stmt;
         this->subType = ASTSubType::Assign;
@@ -97,8 +98,13 @@ public :
     inline void accept(ASTVisitor & visitor) override {
         visitor.enter(this);
 
-        this->expr_ptr->accept(visitor);
-        this->id_ptr->accept(visitor);
+        this->Rexpr_ptr->accept(visitor);
+        if(this->id_ptr == nullptr) {
+            this->Lexpr_ptr->accept(visitor);
+        }
+        else {
+            this->id_ptr->accept(visitor);
+        }        
 
         visitor.visit(this);
         visitor.quit(this);
@@ -240,9 +246,9 @@ public:
 class Return : public Stmt 
 {
 public:
-    unique_ptr<Expr> expr_ptr;
-    static constexpr std::array<std::u8string_view,1> SupportProd=
-    {u8"Stmt -> return Expr ;"};
+    std::optional<unique_ptr<Expr>> expr_ptr;
+    static constexpr std::array<std::u8string_view,2> SupportProd=
+    {u8"Stmt -> return Expr ;",u8"return ;"};
     Return() {
         this->Ntype = ASTType::Stmt;
         this->subType = ASTSubType::Return;
@@ -273,8 +279,17 @@ public:
             assert(NonTnode->childs.size() == 3);
             assert(dynamic_cast<Expr *>(NonTnode->childs[1].get())&&"不是Stmt类型节点");
             auto newNode = std::make_unique<Return>();
+            newNode->expr_ptr = nullptr;
+            newNode->expr_ptr.value().reset(static_cast<Expr*>(NonTnode->childs[1].release()));
             
-            newNode->expr_ptr.reset(static_cast<Expr*>(NonTnode->childs[1].release()));
+            return newNode;
+        }
+        case 1:
+        {
+            //return ;
+            assert(NonTnode->childs.size() == 3);
+            auto newNode = std::make_unique<Return>();
+            newNode->expr_ptr = std::nullopt;
             
             return newNode;
         }
@@ -288,7 +303,8 @@ public:
     }
     inline void accept(ASTVisitor & visitor) override {
         visitor.enter(this);
-        this->expr_ptr->accept(visitor);
+        if(this->expr_ptr.has_value())
+            this->expr_ptr.value()->accept(visitor);
         visitor.visit(this);
         visitor.quit(this);
         return;

@@ -16,7 +16,7 @@ public:
         this->Ntype = ASTType::Dimensions;
         this->subType = ASTSubType::Dimensions;
     }
-    static constexpr std::array<std::u8string_view,3> SupportProd=
+    static constexpr std::array<std::u8string_view,2> SupportProd=
     {u8"Dimensions -> [ num ]",u8"Dimensions -> Dimensions [ num ]" };
     inline static unique_ptr<ASTNode> try_constructS(ASTNode * as , AbstractSyntaxTree * astTree) {
         auto * NonTnode = dynamic_cast<NonTermProdNode *>(as);
@@ -151,8 +151,9 @@ public:
             newNode->id_type =std::move((static_cast<pType*>(NonTnode->childs[0].get()))->type);
             newNode->id_ptr = std::make_unique<SymIdNode>();
             newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[1].get())->value;
-            for(const auto & len : static_cast<Dimensions *>(NonTnode->childs[2].get())->array_len_vec) {
-                newNode->id_type.makeArray(len);
+            const auto& dims = static_cast<Dimensions*>(NonTnode->childs[2].get())->array_len_vec;
+            for (int i = dims.size() - 1; i >= 0; --i) {
+                newNode->id_type.makeArray(dims[i]);
             }
             return newNode;
         }

@@ -16,17 +16,16 @@ enum RightValueBehave {
     NO_INIT,
     ref,
     direct,
-    ptr_cul,
 };
 
-class RightValueExpr : public Expr
+class IdValueExpr : public Expr
 {
 public:
     RightValueBehave behave;
     unique_ptr<SymIdNode> id_ptr;
     unique_ptr<Expr> subExpr = nullptr;
-    static constexpr std::array<std::u8string_view,3> SupportProd=
-    {u8"Expr -> id ", u8"Expr -> id [ Expr ]", u8"Expr -> & id"};
+    static constexpr std::array<std::u8string_view,2> SupportProd=
+    {u8"Expr -> id ", u8"Expr -> & id"};
     inline static unique_ptr<ASTNode> try_constructS(ASTNode * as , AbstractSyntaxTree * astTree) {
         auto * NonTnode = dynamic_cast<NonTermProdNode *>(as);
         if(!NonTnode) {
@@ -53,7 +52,7 @@ public:
             assert(NonTnode->childs.size() == 1);
             
 
-            auto newNode = std::make_unique<RightValueExpr>();
+            auto newNode = std::make_unique<IdValueExpr>();
 
             assert(dynamic_cast<TermSymNode *>(NonTnode->childs[0].get())->token_type == u8"ID" && "不是id类型节点");
             newNode->id_ptr = std::make_unique<SymIdNode>();
@@ -64,28 +63,11 @@ public:
         }
         case 1:
         {
-            // id [ Expr ]
-            assert(NonTnode->childs.size() == 4);
-            
-            assert(dynamic_cast<Expr *>(NonTnode->childs[2].get()) && "不是Expr类型节点");
-
-            auto newNode = std::make_unique<RightValueExpr>();
-            
-            assert(dynamic_cast<TermSymNode *>(NonTnode->childs[0].get())->token_type == u8"ID" && "不是id类型节点");
-            newNode->id_ptr = std::make_unique<SymIdNode>();
-            newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[0].get())->value;
-
-            newNode->subExpr.reset(static_cast<Expr *>(NonTnode->childs[2].release()));
-            newNode->behave = RightValueBehave::ptr_cul;
-            return newNode;
-        }
-        case 2:
-        {
             // & id 
             assert(NonTnode->childs.size() == 2);
             assert(dynamic_cast<TermSymNode* >(NonTnode->childs[0].get())->token_type == u8"DEREF" && "不是REF");
 
-            auto newNode = std::make_unique<RightValueExpr>();
+            auto newNode = std::make_unique<IdValueExpr>();
             
             assert(dynamic_cast<TermSymNode *>(NonTnode->childs[0].get())->token_type == u8"ID" && "不是id类型节点");
             newNode->id_ptr = std::make_unique<SymIdNode>();
@@ -102,13 +84,10 @@ public:
         }
     }
     unique_ptr<ASTNode> try_construct(ASTNode * as , AbstractSyntaxTree * astTree) override {
-        return RightValueExpr::try_constructS(as,astTree);
+        return IdValueExpr::try_constructS(as,astTree);
     }
     inline void accept(ASTVisitor & visitor) override {
         visitor.enter(this);
-        if(this->behave == RightValueBehave::ptr_cul) {
-            this->subExpr->accept(visitor);
-        }
         this->id_ptr->accept(visitor);
         visitor.visit(this);
         visitor.quit(this);
@@ -144,8 +123,8 @@ class DerefExpr : public Expr
 {
 public:
     unique_ptr<Expr> subExpr;
-    static constexpr std::array<std::u8string_view,1> SupportProd=
-    {u8"Expr -> * Expr "};
+    static constexpr std::array<std::u8string_view,2> SupportProd=
+    {u8"Expr -> * Expr ",u8"Expr -> Expr [ Expr ]"};
     DerefExpr() {
         this->Ntype = ASTType::Expr;
         this->subType = ASTSubType::DerefExpr;

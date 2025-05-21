@@ -7,6 +7,7 @@
 #include<optional>
 #include "stringUtil.h"
 #include<iostream>
+#include <expected>
 namespace AST {
 
 enum baseType {
@@ -17,14 +18,36 @@ enum baseType {
     FUNC,   //支持Param类型检查
     ARRAY,
     BASE_PTR,
-    FUNC_PTR,   //不支持Param类型检查
+    FUNC_PTR,
 };
 
+enum CAST_OP {
+    INVALID,       // 非法转换
+    NO_OP,         // 完全等效的类型（如 int → int）
+    PTR_TO_PTR,    // 指针类型转换（如 int (*)[9] → int**）
+    INT_TO_FLOAT,  // int -> float
+    FLOAT_TO_INT,  // float -> int
+    INT_TO_PTR,    // int -> T*
+    PTR_TO_INT,    // T* -> int（如指针转地址）
+    ARRAY_TO_PTR,  // 数组退化为指针（如 int[3] -> int*）
+    FUNC_TO_PTR,   // 函数名退化为函数指针
+    //WIDEN,         // 整型/浮点扩展（如 char -> int）
+    //TRUNCATE,      // 整型/浮点截断（如 int -> char）
+};
+
+// 解引用错误类型
+enum class DerefError {
+    NotDereferenceable,  // 类型不可解引用
+    NullPointer,         // 指针类型但 eType 为空
+    InvalidArray,        // 数组长度<=0或eType为空
+    FunctionType,        // 尝试解引用函数类型
+};
 
 using std::unique_ptr;
 
 class SymType
 {
+    const size_t OS_PTR_SIZE = 8;
 public:
     baseType basicType = NonInit;
     int array_len = 0;              //如果basic是array，则有该参数
@@ -121,7 +144,7 @@ public:
                 return 0;  // void类型不占空间
             case BASE_PTR:
             case FUNC_PTR:
-                return 8;  // 64位指针
+                return OS_PTR_SIZE;  // 64位指针
             case ARRAY:
                 if (eType && array_len > 0) {
                     return eType->alignmentof();  // 递归计算数组元素大小
@@ -153,6 +176,64 @@ public:
         else {
             // 其他类型（INT/FLOAT等）的指针步长就是类型本身大小
             return sizeoff();
+        }
+    }
+    // tuple [是否是左值,解引用后类型]
+    // auto result = sym.deref();
+    // if (result) {
+    //     auto [is_lvalue , type] = result.value();
+    //     if (is_lvalue) {
+    //         // 这个解引用在 C 语言中是左值（可赋值）
+    //     }
+    // }
+    inline std::expected<std::tuple<bool,SymType>, DerefError> deref() const {
+        switch (basicType) {
+            // 基础指针类型（BASE_PTR）
+            case BASE_PTR: {
+                if (!eType) {
+                    return std::unexpected(DerefError::NullPointer);
+                }
+                return std::make_tuple(true,SymType(*eType));  // 返回指向的类型
+            }
+            // 数组类型（ARRAY）
+            case ARRAY: {
+                if (!eType || array_len <= 0) {
+                    return std::unexpected(DerefError::InvalidArray);
+                }
+                return std::make_tuple(true,SymType(*eType));  // 返回数组元素类型
+            }
+            // 函数指针类型（FUNC_PTR）
+            case FUNC_PTR: {
+                // 函数指针的解引用行为：
+                // 1. 返回函数类型（FUNC）
+                // 2. 保留相同的返回类型和参数列表
+                if (!eType) {
+                    return std::unexpected(DerefError::NullPointer);
+                }
+                
+                SymType result;
+                result.basicType = FUNC;
+                result.eType = std::make_unique<SymType>(*eType);  // 拷贝返回类型
+                
+                // 拷贝参数列表
+                for (const auto& param : TypeList) {
+                    result.TypeList.push_back(std::make_unique<SymType>(*param));
+                }
+                
+                return std::make_tuple(false,result);
+            }
+
+            // 函数类型（FUNC）本身不可解引用
+            case FUNC:
+                return std::unexpected(DerefError::FunctionType);
+
+            // 其他不可解引用的类型
+            case INT:
+            case FLOAT:
+            case VOID:
+            case NonInit:
+            default:
+                return std::unexpected(DerefError::NotDereferenceable);
         }
     }
     inline bool check() const {
@@ -267,7 +348,12 @@ public:
         }
         // 对于函数指针类型，还需要比较参数类型列表
         if (a.basicType == FUNC_PTR || a.basicType == FUNC) {
+            if(a.basicType != b.basicType) return false;
             if (a.TypeList.size() != b.TypeList.size()) {
+                return false;
+            }
+            if(!equals(*(a.eType.get()),*(b.eType.get()))) {
+                //检查函数返回值
                 return false;
             }
             for (size_t i = 0; i < a.TypeList.size(); ++i) {
@@ -277,6 +363,15 @@ public:
             }
         }
         return true;
+    }
+    inline static std::u8string_view format(DerefError err) {
+        switch (err) {
+            case DerefError::NotDereferenceable: return u8"类型不可解引用";
+            case DerefError::NullPointer: return u8"指针类型但指向类型为空";
+            case DerefError::InvalidArray: return u8"无效数组类型";
+            case DerefError::FunctionType: return u8"函数类型不可解引用";
+            default: return u8"未知错误";
+        }
     }
     inline std::u8string format() const {
         switch (basicType) {
@@ -302,7 +397,7 @@ public:
                 if (eType->basicType == FUNC || eType->basicType == FUNC_PTR) {
                     return u8"(" + inner + u8")[" + toU8str(std::to_string(array_len)) + u8"]";
                 }
-                return inner + u8"[" + toU8str(std::to_string(array_len)) + u8"]";
+                return u8"[" + toU8str(std::to_string(array_len)) + u8"]" + inner;
             }
             case FUNC:
             case FUNC_PTR: {
@@ -334,57 +429,96 @@ public:
                 return u8"unknown";
         }
     }
-    inline std::tuple<bool, std::u8string> cast_to(const SymType* target) const {
+    inline std::tuple<CAST_OP, std::u8string> cast_to(const SymType* target) const {
         // 1. 检查空指针
         if (target == nullptr) {
-            return {false, u8"内部错误，目标类型为空指针"};
+            return {INVALID, u8"内部错误，目标类型为空指针"};
         }
         // 2. 相同类型可以直接转换（无警告）
         if (equals(*this, *target)) {
-            return {true, u8""};
+            return {NO_OP, u8""};
         }
         // 3. void 指针的特殊处理（修正版）
         if (basicType == BASE_PTR && target->basicType == BASE_PTR) {
             // 先确保双方都是指针类型
             if (eType && eType->basicType == VOID) {
-                return {true, u8""};  // void* 可以转换为任何指针类型
+                return {PTR_TO_PTR, u8""};  // void* 可以转换为任何指针类型
             }
             if (target->eType && target->eType->basicType == VOID) {
-                return {true, u8""};  // 任何指针类型可以转换为 void*
+                return {PTR_TO_PTR, u8""};  // 任何指针类型可以转换为 void*
             }
             // 非void指针之间的转换（可能有警告）
-            return {true, u8"不同类型的指针转换可能有风险"};
+            return {PTR_TO_PTR, u8"不同类型的指针转换可能有风险"};
+        }
+        //PTR TO INT情况
+        if (basicType == BASE_PTR && target->basicType == INT) {
+            return {PTR_TO_INT, u8"指针到整型的隐式转换（可能不安全）"};
         }
         // 4. 数值类型转换检查
         if ((basicType == INT || basicType == FLOAT) && 
             (target->basicType == INT || target->basicType == FLOAT)) {
             // 数值类型之间可以互相转换，但可能有精度损失警告
             if (basicType == FLOAT && target->basicType == INT) {
-                return {true, u8"浮点数转换为整数可能导致精度损失"};
+                return {FLOAT_TO_INT, u8"浮点数转换为整数可能导致精度损失"};
             }
             if (basicType == INT && target->basicType == FLOAT) {
-                return {true, u8""};
+                return {INT_TO_FLOAT, u8""};
             }
-            return {true, u8""};
+            return {NO_OP, u8""};
         }
 
         // 5. 数组和指针的转换
         if (basicType == ARRAY && target->basicType == BASE_PTR) {
             // 数组退化为指针，需要检查元素类型是否匹配
-            if (eType && target->eType && equals(*eType, *target->eType)) {
-                return {true, u8""};  // 类型匹配，无警告
+            if (eType && target->eType) {
+                return (*eType).cast_to(target->eType.get()); //数组退化需要递归检查
+                //return {NO_OP, u8""};  // 类型匹配，无警告
             }
-            return {false, u8"数组元素类型与指针指向类型不匹配"};
+            return {INVALID, u8"数组元素类型与指针指向类型不匹配"};
         }
 
         // 6. 函数指针转换
-        if (basicType == FUNC_PTR && target->basicType == FUNC_PTR) {
-            // 宽松的函数指针转换规则（可能有警告）
-            return {true, u8"函数指针类型不完全匹配"};
+        if ((basicType == FUNC_PTR || basicType == FUNC) && 
+            (target->basicType == FUNC_PTR || target->basicType == FUNC)) 
+        {
+            // 检查返回值类型是否兼容
+            if (!eType || !target->eType) {
+                return {INVALID, u8"函数返回值类型缺失"};
+            }
+            
+            if (!equals(*eType, *target->eType)) {  // 返回值必须完全匹配
+                return {INVALID, u8"函数返回值类型不匹配"};
+            }
+
+            // 宽松的形参检查规则：
+            // - 如果目标函数没有参数（TypeList为空），允许任何函数指针转换（如可变参数函数）
+            // - 否则，形参数量和类型必须严格匹配
+            if (target->TypeList.empty()) {
+                if(basicType == FUNC)
+                    return {FUNC_TO_PTR, u8"目标函数接受任意参数（如可变参数函数）"};
+                else
+                    return {PTR_TO_PTR, u8"目标函数接受任意参数（如可变参数函数）"};
+            }
+            
+            // 检查参数
+            if (TypeList.size() != target->TypeList.size()) {
+                return {INVALID, u8"形参数量不匹配"};
+            }
+            for (size_t i = 0; i < TypeList.size(); ++i) {
+                if (!equals(*TypeList[i], *target->TypeList[i])) {  // 参数类型必须完全匹配
+                    return {INVALID, u8"第" + toU8str(i+1) + u8"个形参类型不匹配"};
+                }
+            }
+
+            // 所有检查通过，允许转换（可能有警告）
+            if(basicType == FUNC)
+                return {FUNC_TO_PTR, u8""};
+            else
+                return {PTR_TO_PTR, u8""};
         }
 
         // 如果以上条件都不满足，转换失败
-        return {false, u8"类型不兼容，无法安全转换"};
+        return {INVALID, u8"类型不兼容，无法安全转换"};
     }
 };
 

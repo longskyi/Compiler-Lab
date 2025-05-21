@@ -35,8 +35,19 @@ unique_ptr<ASTNode> Assign::try_constructS(ASTNode * as , AbstractSyntaxTree * a
         newNode->id_ptr = std::make_unique<SymIdNode>();
         newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[0].get())->value;
         
-        newNode->expr_ptr.reset(static_cast<Expr*>(NonTnode->childs[2].release()));
+        newNode->Rexpr_ptr.reset(static_cast<Expr*>(NonTnode->childs[2].release()));
         return newNode;
+    }
+    case 1:
+    {
+        //Expr = Expr ;
+        assert(NonTnode->childs.size() == 4);
+        assert(dynamic_cast<Expr *>(NonTnode->childs[0].get())&& "不是Expr类型节点");
+        assert(dynamic_cast<Expr *>(NonTnode->childs[2].get())&&"不是Expr类型节点");
+        auto newNode = std::make_unique<Assign>();
+        newNode->Lexpr_ptr.reset(static_cast<Expr*>(NonTnode->childs[0].release()));
+        newNode->Rexpr_ptr.reset(static_cast<Expr*>(NonTnode->childs[2].release()));
+        return newNode; 
     }
     default:
         std::cerr <<"Not implement Assign Node :"<< targetProd<<std::endl;

@@ -1,0 +1,4 @@
+#ifndef LCMP_ASM_GEN_HEADER
+#define LCMP_ASM_GEN_HEADER
+
+#endif

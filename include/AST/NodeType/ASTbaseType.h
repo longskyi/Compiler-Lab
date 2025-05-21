@@ -166,7 +166,7 @@ class SymIdNode : public ASTNode
 {
 public :
     u8string Literal;
-    void * symEntryPtr; //program symbol entry ptr
+    void * symEntryPtr = nullptr; //program symbol entry ptr
     inline SymIdNode() {
         this->Ntype = ASTType::SymIdNode;
         this->subType = ASTSubType::SymIdNode;
