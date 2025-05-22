@@ -27,6 +27,7 @@ set(SOURCE
     ${CMAKE_CURRENT_LIST_DIR}/src/SyntaxType.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/fileIO.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/parserGen.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/Semantic.cpp
     ${ASTSOURCE}
     )
 
