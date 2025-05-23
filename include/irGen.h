@@ -10,12 +10,31 @@ using std::u8string;
 
 using OperandId = StrongId<struct OperandIdTag>;
 
+const int PTR_LENGTH_IN_BYTES = 8;
+
 enum Datatype {
         noneinit,
         i32,
         ptr,    //(i64)
         f32,
 };
+
+inline u8string IRformat(const Datatype & datatype) {
+    switch (datatype) {
+        case Datatype::noneinit:
+            return u8"noneinit";  // 非初始化类型（特殊处理）
+        case Datatype::i32:
+            return u8"i32";       // 32位整数
+        case Datatype::ptr:
+            return u8"ptr";       // 指针类型
+        case Datatype::f32:
+            return u8"f32";     // 32位浮点数
+        default:
+            return u8"unknown";   // 未知类型（错误处理）
+    }
+    return u8"unknown";
+}
+
 
 inline Datatype TypingSystem2IRType(AST::SymType & Type) {
     switch (Type.basicType) {
@@ -125,9 +144,9 @@ public:
         case MemPlace::GLOBAL:
             // 全局变量格式: 类型@LiteralName（忽略 unique_id）
             switch (datatype) {
-            case OperandType::i32:  ret += u8"i32@"; break;
-            case OperandType::ptr:  ret += u8"ptr@"; break;
-            case OperandType::f32:  ret += u8"f32@"; break;
+            case OperandType::i32:  ret += u8"i@"; break;
+            case OperandType::ptr:  ret += u8"p@"; break;
+            case OperandType::f32:  ret += u8"f@"; break;
             case OperandType::LABEL: ret += u8"L@";   break;
             default:                ret += u8"@";    break;
             }
@@ -146,9 +165,9 @@ public:
             // 栈变量格式: 类型%[Literal_]unique_id
             switch (datatype) {
             case OperandType::noneinit: ret += u8"NULL%";   break;
-            case OperandType::i32:      ret += u8"i32%";    break;
-            case OperandType::ptr:      ret += u8"ptr%";    break;
-            case OperandType::f32:      ret += u8"f32%";    break;
+            case OperandType::i32:      ret += u8"i%";    break;
+            case OperandType::ptr:      ret += u8"p%";    break;
+            case OperandType::f32:      ret += u8"f%";    break;
             case OperandType::LABEL:    ret += u8"L%";      break;
             }
             if (LiteralName.empty()) {
@@ -337,8 +356,8 @@ struct printInst {
 struct BrInst {
     bool is_conditional = false;
     Operand condition;
-    Operand label1;
-    Operand label2;
+    Operand trueLabel;
+    Operand falseLabel;
     bool validate() const {
         if (is_conditional) {
             if (condition.datatype != Operand::OperandType::i32) {
@@ -346,8 +365,8 @@ struct BrInst {
             }
         }
         // 标签必须是LABEL类型
-        if (label1.datatype != Operand::OperandType::LABEL || 
-            (is_conditional && label2.datatype != Operand::OperandType::LABEL)) {
+        if (trueLabel.datatype != Operand::OperandType::LABEL || 
+            (is_conditional && falseLabel.datatype != Operand::OperandType::LABEL)) {
             return false;
         }
         return true;
@@ -361,6 +380,10 @@ struct phiInst {
 
 struct labelInst {
     Operand label;
+    labelInst(Operand label_) {
+        label = label_;
+    }
+    labelInst(){}
 };
 
 
@@ -376,29 +399,40 @@ using IRinst = std::variant<
     labelInst>;
 
 
-inline u8string IRformat(IRinst inst) {
+inline u8string BinaryOpInstOPtypeToString(BinaryOpInst::OPtype type) {
+    switch(type) {
+    case BinaryOpInst::OPtype::i32: return u8"i32";
+    case BinaryOpInst::OPtype::ptr: return u8"ptr";
+    case BinaryOpInst::OPtype::f32: return u8"f32";
+    default: return u8"";
+    }
+}
+
+inline u8string IRformat(const IRinst inst) {
     return std::visit(overload {
         // 1. 二元运算指令 (add/mul/cmp/cast)
         [](const BinaryOpInst& op) -> u8string {
             u8string ret;
+            ret += op.dst.format() + u8" = ";
             switch (op.op) {
             case BinaryOpInst::MainOP::add:
-                ret = u8"add ";
+                ret += u8"add." + BinaryOpInstOPtypeToString(op.op_type) + u8" ";
                 break;
             case BinaryOpInst::MainOP::mul:
-                ret = u8"mul ";
+                ret += u8"mul." + BinaryOpInstOPtypeToString(op.op_type) + u8" ";
                 break;
             case BinaryOpInst::MainOP::cmp: {
                 u8string cmp_op;
                 switch (op.cmp_type) {
                 case BinaryOpInst::cmpType::EQ: cmp_op = u8"eq "; break;
+                case BinaryOpInst::cmpType::NE: cmp_op = u8"ne "; break;
                 case BinaryOpInst::cmpType::GE: cmp_op = u8"ge "; break;
                 case BinaryOpInst::cmpType::G:  cmp_op = u8"gt "; break;
                 case BinaryOpInst::cmpType::LE: cmp_op = u8"le "; break;
                 case BinaryOpInst::cmpType::L:  cmp_op = u8"lt "; break;
-                default: cmp_op = u8""; break;
+                default: cmp_op += u8""; break;
                 }
-                ret = u8"cmp." + cmp_op;
+                ret += u8"cmp." + cmp_op;
                 break;
             }
             case BinaryOpInst::MainOP::cast: {
@@ -410,16 +444,16 @@ inline u8string IRformat(IRinst inst) {
                 case BinaryOpInst::OPtype::i32Tof32: cast_op = u8"i32_to_f32 "; break;
                 default: cast_op = u8""; break;
                 }
-                ret = u8"cast." + cast_op;
+                ret += u8"cast." + cast_op;
                 break;
             }
             case BinaryOpInst::MainOP::COPY:
-                ret = u8"copy ";
+                ret += u8"copy ";
                 break;
             default:
                 return u8"";
             }
-            ret += op.dst.format() + u8" = " + op.src1.format();
+            ret += u8" " + op.src1.format();
             if (op.op != BinaryOpInst::MainOP::cast) {
                 ret += u8", " + op.src2.format();
             }
@@ -450,10 +484,10 @@ inline u8string IRformat(IRinst inst) {
         // 4. 内存读写指令
         [](const memOpInst& mem) -> u8string {
             if (mem.memOP == memOpInst::OP::load) {
-                return mem.dst.format() + u8" = load " + mem.src.format() + 
+                return mem.dst.format() + u8" = load " + IRformat(mem.datatype) + u8" " + mem.src.format() + 
                        u8", align " + toU8str(std::to_string(mem.align));
             } else if (mem.memOP == memOpInst::OP::store) {
-                return u8"store " + mem.src.format() + u8", " + 
+                return u8"store " + IRformat(mem.datatype) + u8" " + mem.src.format() + u8", " + 
                        mem.dst.format() + u8", align " + toU8str(std::to_string(mem.align));
             }
             return u8"";
@@ -469,10 +503,10 @@ inline u8string IRformat(IRinst inst) {
         // 6. 分支指令
         [](const BrInst& br) -> u8string {
             if (!br.is_conditional) {
-                return u8"br " + br.label1.format();
+                return u8"br " + br.trueLabel.format();
             }
             return u8"br " + br.condition.format() + u8", " + 
-                   br.label1.format() + u8", " + br.label2.format();
+                   br.trueLabel.format() + u8", " + br.falseLabel.format();
         },
 
         // 7. Phi节点指令
@@ -533,9 +567,32 @@ class IRContent {
 public:
     std::vector<GlobalVarIR> globalVar;
     std::vector<FunctionIR> FunctionIR;
-    void print() const {
+    void print(std::ostream & out = std::cout) const {
+        auto ptab = [&out](int depth = 1){
+            for(int i =0 ; i<depth;i++) {
+                out<<"    ";
+            }
+            return;
+        };
         for(const auto & gb : globalVar) {
-            std::cout<<toString_view(gb.format())<<std::endl;
+            out<<toString_view(gb.format())<<std::endl;
+        }
+        for(const auto & func : FunctionIR) {
+            out<<std::format("define {} @{} (",
+                toString_view(func.funcName),toString_view(IRformat(func.retType)));
+            for(const auto & argT : func.ArgsType) {
+                out<<toString_view(IRformat(argT))<<" ";
+            }
+            out<<"){\n";
+            for(const auto & inst : func.Instblock) {
+                if(auto inst_ptr = std::get_if<labelInst>(&inst)) {
+                    ptab(0);
+                } else {
+                    ptab(1);
+                }
+                out<<toString_view(IRformat(inst))<<"\n";
+            }
+            out<<"}\n";
         }
     }
 
@@ -547,8 +604,10 @@ using EntryOperandMap = std::unordered_map<Semantic::SymbolEntry *,Operand>;
 //生成IR时候需要的上下文
 struct IRNodeContext {
     Operand expr_addr;
-    std::vector<Operand> BoolTrueLabel;
-    std::vector<Operand> BoolFalseLabel;
+    Operand BoolTrueLabel;
+    Operand BoolFalseLabel;
+    Operand BoolTmpLabel1;
+    Operand BoolTmpLabel2;
     std::deque<IRinst> code;
 };
 
@@ -578,7 +637,7 @@ public:
     bool gotError = false;
 
     // Method declarations
-    inline bool build(Semantic::SemanticSymbolTable* symtab, AST::AbstractSyntaxTree* astT, IRContent* irbase, EntryOperandMap* entrymap);
+    inline bool build(Semantic::SemanticSymbolTable* symtab, AST::AbstractSyntaxTree* astT, IRContent* irbase,Semantic::ExprTypeCheckMap * expr_type_map , EntryOperandMap* entrymap);
     inline void enter(AST::ASTNode* node) override;
     inline void visit(AST::ASTNode* node) override;
     inline void quit(AST::ASTNode* node) override;
@@ -661,12 +720,15 @@ inline void genLoadInst(std::deque<IRinst> & insts ,Operand srcAddr,Operand dst)
     {
     case Operand::OperandType::f32 :
         load_inst.datatype = f32;
+        load_inst.align = 4;
         break;
     case Operand::OperandType::i32 :
         load_inst.datatype = i32;
+        load_inst.align = 4;
         break;
     case Operand::OperandType::ptr :
         load_inst.datatype = ptr;
+        load_inst.align = PTR_LENGTH_IN_BYTES;
         break;
     case Operand::OperandType::LABEL :
     case Operand::OperandType::noneinit :
@@ -687,12 +749,15 @@ inline void genStoreInst(std::deque<IRinst> & insts ,Operand src,Operand dstAddr
     {
     case Operand::OperandType::f32 :
         store_inst.datatype = f32;
+        store_inst.align = 4;
         break;
     case Operand::OperandType::i32 :
         store_inst.datatype = i32;
+        store_inst.align = 4;
         break;
     case Operand::OperandType::ptr :
         store_inst.datatype = ptr;
+        store_inst.align = PTR_LENGTH_IN_BYTES;
         break;
     case Operand::OperandType::LABEL :
     case Operand::OperandType::noneinit :
@@ -756,8 +821,33 @@ inline bool parseStmtIRGen(AST::Stmt * Stmt_ptr,IRGenVisitor * IRGenerator) {
             //not implement
         }
     }
-    // Branch,
-    // Loop,
+    if(Stmt_ptr->subType == AST::ASTSubType::FunctionCall) {
+        auto call_ptr = static_cast<AST::FunctionCall *>(Stmt_ptr);
+        auto id_ptr = call_ptr->id_ptr.get();
+        const auto & pList = call_ptr->paramList_ptr->paramList;
+        std::vector<AST::Expr *> paramExprList;    //目前Param只支持Expr一种
+        std::deque<IRinst> curr_code;
+        for(const auto & p : pList) {
+            if(p->expr_ptr==nullptr) std::cerr<<"不支持的param类型\n";
+            paramExprList.push_back(p->expr_ptr.get());
+        }
+        std::vector<Operand> paramOperands;
+        for(const auto expr_ptr : paramExprList) {
+            auto ir = IRGenerator->ContextMap.at(expr_ptr);
+            curr_code.insert(curr_code.end(),std::move_iterator(ir.code.begin()),std::move_iterator(ir.code.end()));
+            paramOperands.push_back(ir.expr_addr);
+            Context.erase(expr_ptr);
+        }
+        callOpInst call_inst;
+        auto func = fetchIdAddr(call_ptr->id_ptr.get(),IRGenerator);
+        auto typing = static_cast<Semantic::SymbolEntry *>(call_ptr->id_ptr->symEntryPtr)->Type;
+        call_inst.srcs = paramOperands;
+        call_inst.targetFUNC = func; 
+        Operand dst;
+        call_inst.ret = dst;
+        curr_code.push_back(call_inst);
+        Context[Stmt_ptr].code = std::move(curr_code);
+    }
     // FunctionCall, 下面有expr版本的
     // Return,
     // StmtPrint,
@@ -818,7 +908,7 @@ inline bool parseExprIRGen(AST::Expr * Expr_ptr,IRGenVisitor * IRGenerator) {
         Operand addrOperand;
 
 
-        if(idExpr_ptr->behave == AST::ref) {
+        if(idExpr_ptr->behave == AST::ref ) {
             //取地址，一定是右值，送变量地址 + 类型转换 PTR_TO_INT
             auto idAddr = fetchIdAddr(idExpr_ptr->id_ptr.get(),IRGenerator);
             //safe check
@@ -835,8 +925,9 @@ inline bool parseExprIRGen(AST::Expr * Expr_ptr,IRGenVisitor * IRGenerator) {
         }
         else if(idExpr_ptr->behave == AST::direct) {
             //取id，考虑左右值
-            if(TypingNode.ret_is_left_value) {
+            if(TypingNode.ret_is_left_value || TypingNode.retType.basicType == AST::ARRAY ||TypingNode.retType.basicType == AST::FUNC) {
                 //左值，送变量地址 + 忽略类型转换 不生成code
+                //数组 函数发生隐式类型转换
                 auto idAddr = fetchIdAddr(idExpr_ptr->id_ptr.get(),IRGenerator);
                 addrOperand = idAddr;
             } else {
@@ -857,7 +948,90 @@ inline bool parseExprIRGen(AST::Expr * Expr_ptr,IRGenVisitor * IRGenerator) {
         Context[Expr_ptr].code = std::move(curr_code);
     }
     if(Expr_ptr->subType == AST::ASTSubType::ArithExpr) {
+        auto arithExpr = static_cast<AST::ArithExpr *>(Expr_ptr);
+        const auto & TypingNode = IRGenerator->ExprTypeMap->at(Expr_ptr);
+        auto cast_op = TypingNode.cast_op;
+        
+        if(TypingNode.arithOp == Semantic::ADDI || TypingNode.arithOp == Semantic::ADDF || 
+        TypingNode.arithOp == Semantic::MULI || TypingNode.arithOp == Semantic::MULF) {
+            
+            std::deque<IRinst> curr_code;
+            bool is_float = (TypingNode.arithOp == Semantic::ADDF || TypingNode.arithOp == Semantic::MULF);
+            Operand dst = Operand::allocOperand(is_float ? f32 : i32);
+            
+            BinaryOpInst inst;
+            inst.op = (TypingNode.arithOp == Semantic::ADDI || TypingNode.arithOp == Semantic::ADDF) 
+                    ? BinaryOpInst::add : BinaryOpInst::mul;
+            inst.op_type = is_float ? BinaryOpInst::f32 : BinaryOpInst::i32;
+            inst.dst = dst;
+            inst.src1 = IRGenerator->ContextMap.at(arithExpr->Lval_ptr.get()).expr_addr;
+            inst.src2 = IRGenerator->ContextMap.at(arithExpr->Rval_ptr.get()).expr_addr;
+            
+            auto & lcode = IRGenerator->ContextMap.at(arithExpr->Lval_ptr.get()).code;
+            auto & rcode = IRGenerator->ContextMap.at(arithExpr->Rval_ptr.get()).code;
+            
+            curr_code.insert(curr_code.end(), std::move_iterator(lcode.begin()), std::move_iterator(lcode.end()));
+            curr_code.insert(curr_code.end(), std::move_iterator(rcode.begin()), std::move_iterator(rcode.end()));
+            curr_code.push_back(inst);
+            
+            auto truedst = genCastInst(curr_code, cast_op, dst);
+            IRGenerator->ContextMap[Expr_ptr].code = std::move(curr_code);
+            IRGenerator->ContextMap[Expr_ptr].expr_addr = truedst;
+        } else if(TypingNode.arithOp == Semantic::PTR_ADDI) {
+            std::deque<IRinst> curr_code;
+            
+            // 获取指针和整数的操作数
+            Operand ptr_op, int_op;
+            if(IRGenerator->ContextMap.at(arithExpr->Lval_ptr.get()).expr_addr.datatype == Operand::ptr) {
+                ptr_op = IRGenerator->ContextMap.at(arithExpr->Lval_ptr.get()).expr_addr;
+                int_op = IRGenerator->ContextMap.at(arithExpr->Rval_ptr.get()).expr_addr;
+            } else {
+                ptr_op = IRGenerator->ContextMap.at(arithExpr->Rval_ptr.get()).expr_addr;
+                int_op = IRGenerator->ContextMap.at(arithExpr->Lval_ptr.get()).expr_addr;
+            }
+            
+            // 获取对应的代码块
+            auto & ptr_code = IRGenerator->ContextMap.at(arithExpr->Lval_ptr.get()).code;
+            auto & int_code = IRGenerator->ContextMap.at(arithExpr->Rval_ptr.get()).code;
+            
+            // 合并代码
+            curr_code.insert(curr_code.end(), std::move_iterator(ptr_code.begin()), std::move_iterator(ptr_code.end()));
+            curr_code.insert(curr_code.end(), std::move_iterator(int_code.begin()), std::move_iterator(int_code.end()));
+            
+            // 1. 首先将整数乘以指针步长
+            Operand scaled_int = Operand::allocOperand(Operand::i32);
+            BinaryOpInst mul_inst;
+            mul_inst.op = BinaryOpInst::mul;
+            mul_inst.op_type = BinaryOpInst::i32;
+            mul_inst.dst = scaled_int;
+            mul_inst.src1 = int_op;
+            mul_inst.src2 = Operand::allocIMM(Operand::i32, 0, TypingNode.helpNum1); // 步长立即数
+            curr_code.push_back(mul_inst);
+            
+            // 2. 将结果转换为指针类型
+            Operand int_as_ptr = scaled_int;
+            if(scaled_int.datatype != Operand::ptr) {
+                AST::CAST_OP cast_op = AST::CAST_OP::INT_TO_PTR;
+                int_as_ptr = genCastInst(curr_code, cast_op, scaled_int);
+            }
+            
+            // 3. 执行指针加法
+            Operand result_ptr = Operand::allocOperand(Operand::ptr);
+            BinaryOpInst add_inst;
+            add_inst.op = BinaryOpInst::add;
+            add_inst.op_type = BinaryOpInst::ptr; // 指针加法使用整数运算
+            add_inst.dst = result_ptr;
+            add_inst.src1 = ptr_op;
+            add_inst.src2 = int_as_ptr;
+            curr_code.push_back(add_inst);
+            
+            // 存储结果
+            IRGenerator->ContextMap[Expr_ptr].code = std::move(curr_code);
+            IRGenerator->ContextMap[Expr_ptr].expr_addr = result_ptr;
 
+        } else {
+            std::cerr << "Unknown ArithOp\n";
+        }
     }
     if(Expr_ptr->subType == AST::ASTSubType::CallExpr) {
         auto callExpr_ptr = static_cast<AST::CallExpr *>(Expr_ptr);
@@ -881,14 +1055,221 @@ inline bool parseExprIRGen(AST::Expr * Expr_ptr,IRGenVisitor * IRGenerator) {
         Context[Expr_ptr].code = std::move(curr_code);
     }
     if(Expr_ptr->subType == AST::ASTSubType::DerefExpr) {
-
+        auto derefExpr = static_cast<AST::DerefExpr *>(Expr_ptr);
+        auto & TypingNode = IRGenerator->ExprTypeMap->at(derefExpr);
+        auto & sub_ctx = Context.at(derefExpr->subExpr.get());
+        std::deque<IRinst> curr_code;
+        if(TypingNode.ret_is_left_value || TypingNode.retType.basicType == AST::baseType::ARRAY) {
+            //作为左值，返回ptr
+            Context[Expr_ptr].code = std::move(sub_ctx.code);
+            Context[Expr_ptr].expr_addr = std::move(sub_ctx.expr_addr);
+            Context.erase(derefExpr->subExpr.get());
+        } else {
+            //作为右值，则需要取值
+            auto Addr = sub_ctx.expr_addr;
+            Operand ValOperand = Operand::allocOperand(TypingSystem2OperandType(TypingNode.retType));
+            genLoadInst(curr_code,Addr,ValOperand);
+            auto addrOperand = genCastInst(curr_code,TypingNode.cast_op,ValOperand);
+            Context[Expr_ptr].code = std::move(sub_ctx.code);
+            Context[Expr_ptr].code.insert(Context.at(Expr_ptr).code.end(),curr_code.begin(),curr_code.end());
+            Context[Expr_ptr].expr_addr = std::move(addrOperand);
+            Context.erase(derefExpr->subExpr.get());
+        }
     }
     return true;
 }
 
-inline bool parseBoolIRGen(AST::ASTBool * Bool_ptr,IRGenVisitor * IRGenerator) {
-    auto & Context = IRGenerator->ContextMap;
 
+
+// Branch,// Loop, 由于布尔表达式的存在，其生成不是完全的自底向上，需要特殊处理
+inline bool parseControlIRGenENTER(AST::Stmt* stmt_ptr, IRGenVisitor* IRGenerator) {
+    //在进入时，向布尔表达式分发标签
+    auto& Context = IRGenerator->ContextMap;
+    if(stmt_ptr->subType == AST::ASTSubType::Branch) {
+        auto br_ptr = static_cast<AST::Branch *>(stmt_ptr);
+        auto ThenLabel = Operand::allocLabel(u8"THEN");
+        auto ELSELabel = Operand::allocLabel(u8"ELSE");
+        Context[stmt_ptr].BoolTrueLabel = ThenLabel;
+        Context[stmt_ptr].BoolFalseLabel = ELSELabel;
+        Context[br_ptr->bool_ptr.get()].BoolTrueLabel = ThenLabel;
+        Context[br_ptr->bool_ptr.get()].BoolFalseLabel = ELSELabel;
+    }
+    if(stmt_ptr->subType == AST::ASTSubType::Loop) {
+        auto loop_ptr = static_cast<AST::Loop *>(stmt_ptr);
+        auto ThenLabel = Operand::allocLabel(u8"THEN");
+        auto ENDLabel = Operand::allocLabel(u8"END");
+        Context[loop_ptr].BoolTrueLabel = ThenLabel;
+        Context[loop_ptr].BoolFalseLabel = ENDLabel;
+        Context[loop_ptr->bool_ptr.get()].BoolTrueLabel = ThenLabel;
+        Context[loop_ptr->bool_ptr.get()].BoolFalseLabel = ENDLabel;
+    }
+    return true;
+}
+
+inline bool parseControlIRGenQUIT(AST::Stmt* stmt_ptr, IRGenVisitor* IRGenerator) {
+    auto& Context = IRGenerator->ContextMap;
+    
+    if(stmt_ptr->subType == AST::ASTSubType::Branch) {
+        auto br_ptr = static_cast<AST::Branch*>(stmt_ptr);
+        std::deque<IRinst> merged_code;
+        
+        // 合并条件表达式代码
+        merged_code.insert(merged_code.end(), 
+                          Context[br_ptr->bool_ptr.get()].code.begin(),
+                          Context[br_ptr->bool_ptr.get()].code.end());
+        
+        if(br_ptr->op == AST::ifOnly) {
+            // 生成THEN块代码
+            merged_code.push_back(labelInst(Context[stmt_ptr].BoolTrueLabel));
+            auto& then_ctx = Context[br_ptr->if_stmt_ptr.get()];
+            merged_code.insert(merged_code.end(), then_ctx.code.begin(), then_ctx.code.end());
+            merged_code.push_back(labelInst(Context[stmt_ptr].BoolFalseLabel));
+            Context.erase(br_ptr->if_stmt_ptr.get());
+        } 
+        else { // if-else
+            // 生成THEN块代码
+            merged_code.push_back(labelInst(Context[stmt_ptr].BoolTrueLabel));
+            auto& then_ctx = Context[br_ptr->if_stmt_ptr.get()];
+            merged_code.insert(merged_code.end(), then_ctx.code.begin(), then_ctx.code.end());
+            // 添加跳转到END的指令
+            auto ENDLabel = Operand::allocLabel(u8"END");
+            BrInst gotoinst;
+            gotoinst.is_conditional = false;
+            gotoinst.trueLabel = ENDLabel;
+            merged_code.push_back(gotoinst);
+            // 添加ELSE标签和代码
+            merged_code.push_back(labelInst(Context[stmt_ptr].BoolFalseLabel));
+            auto& else_ctx = Context[br_ptr->else_stmt_ptr.value().get()];
+            merged_code.insert(merged_code.end(), else_ctx.code.begin(), else_ctx.code.end());
+            // 添加END标签
+            merged_code.push_back(labelInst(ENDLabel));
+            Context.erase(br_ptr->if_stmt_ptr.get());
+            Context.erase(br_ptr->else_stmt_ptr.value().get());
+        }
+        
+        Context[stmt_ptr].code = std::move(merged_code);
+    }
+    else if(stmt_ptr->subType == AST::ASTSubType::Loop) {
+        auto loop_ptr = static_cast<AST::Loop*>(stmt_ptr);
+        std::deque<IRinst> loop_code;
+        
+        // 生成循环头标签
+        auto HEADERLabel = Operand::allocLabel(u8"HEADER");
+        loop_code.push_back(labelInst(HEADERLabel));
+        
+        // 合并条件表达式代码
+        loop_code.insert(loop_code.end(),
+                        Context[loop_ptr->bool_ptr.get()].code.begin(),
+                        Context[loop_ptr->bool_ptr.get()].code.end());
+        Context.erase(loop_ptr->bool_ptr.get());
+        // 生成THEN块代码
+        loop_code.push_back(labelInst(Context[stmt_ptr].BoolTrueLabel));
+        auto& body_ctx = Context[loop_ptr->stmt_ptr.get()];
+        loop_code.insert(loop_code.end(), body_ctx.code.begin(), body_ctx.code.end());
+        Context.erase(loop_ptr->stmt_ptr.get());
+        BrInst gotoinst;
+        gotoinst.is_conditional = false;
+        gotoinst.trueLabel = HEADERLabel;
+        loop_code.push_back(gotoinst);
+        // 添加END标签
+        loop_code.push_back(labelInst(Context[stmt_ptr].BoolFalseLabel));
+        
+        Context[stmt_ptr].code = std::move(loop_code);
+    }
+    
+    return true;
+}
+
+inline bool parseBoolIRGenENTER(AST::ASTBool* Bool_ptr, IRGenVisitor* IRGenerator) {
+    auto& Context = IRGenerator->ContextMap;
+    if(Bool_ptr->isBoolOperation) {
+        //只有and or需要进行标签分发
+        auto currTHEN = Context[Bool_ptr].BoolTrueLabel;
+        auto currELSE = Context[Bool_ptr].BoolFalseLabel;
+        auto RIGHTLabel = Operand::allocLabel(u8"RIGH");
+        Context[Bool_ptr].BoolTmpLabel1 = RIGHTLabel;
+        if(Bool_ptr->BoolOP == AST::BOOLAND) {
+            Context[Bool_ptr->LBool.get()].BoolTrueLabel = RIGHTLabel;
+            Context[Bool_ptr->LBool.get()].BoolFalseLabel = currELSE;   //短路
+
+            Context[Bool_ptr->RBool.get()].BoolTrueLabel = currTHEN;
+            Context[Bool_ptr->RBool.get()].BoolFalseLabel = currELSE;
+            
+        } else if(Bool_ptr->BoolOP == AST::BOOLOR) {
+            Context[Bool_ptr->LBool.get()].BoolTrueLabel = currTHEN;    //短路
+            Context[Bool_ptr->LBool.get()].BoolFalseLabel = RIGHTLabel;   
+
+            Context[Bool_ptr->RBool.get()].BoolTrueLabel = currTHEN;
+            Context[Bool_ptr->RBool.get()].BoolFalseLabel = currELSE;
+        } else {
+            std::cerr<<"BOOL错误\n";
+        }
+    }
+    return true;
+}
+
+inline bool parseBoolIRGenQUIT(AST::ASTBool* Bool_ptr, IRGenVisitor* IRGenerator) {
+    auto& Context = IRGenerator->ContextMap;
+    if(Bool_ptr->isBoolOperation) 
+    {
+        std::deque<IRinst> curr_code;
+        Operand bool_val;
+        // 左操作数
+        auto& left_ctx = Context[Bool_ptr->LBool.get()];
+        curr_code.insert(curr_code.end(), left_ctx.code.begin(), left_ctx.code.end());
+        
+        // 短路标签
+        if(!Context[Bool_ptr].BoolTmpLabel1.empty()) {
+            curr_code.push_back(labelInst(Context[Bool_ptr].BoolTmpLabel1));
+        } else {
+            std::cerr<<"内部错误：Bool短路标签缺失\n";
+        }
+        // 右操作数
+        auto& right_ctx = Context[Bool_ptr->RBool.get()];
+        curr_code.insert(curr_code.end(), right_ctx.code.begin(), right_ctx.code.end());
+
+        Context[Bool_ptr].code = std::move(curr_code);
+        Context[Bool_ptr].expr_addr = bool_val;
+    }
+    else {
+        auto& left_ctx = Context[Bool_ptr->Lval_ptr.get()];
+        std::deque<IRinst> curr_code(left_ctx.code.begin(), left_ctx.code.end());
+        Operand bool_val = left_ctx.expr_addr; // 默认为单表达式布尔值
+        if (Bool_ptr->rop != AST::ROP_ENUM::NoneROP) {
+            auto& right_ctx = Context[Bool_ptr->Rval_ptr.get()];
+            curr_code.insert(curr_code.end(), right_ctx.code.begin(), right_ctx.code.end());
+            BinaryOpInst cmp;
+            cmp.op = BinaryOpInst::cmp;
+            cmp.src1 = left_ctx.expr_addr;
+            cmp.src2 = right_ctx.expr_addr;
+            switch(Bool_ptr->rop) {
+                case AST::ROP_ENUM::L:  cmp.cmp_type = BinaryOpInst::L;  break;
+                case AST::ROP_ENUM::LE: cmp.cmp_type = BinaryOpInst::LE; break;
+                case AST::ROP_ENUM::G:  cmp.cmp_type = BinaryOpInst::G;  break;
+                default: return false;
+            }
+            bool_val = Operand::allocOperand(Operand::i32, u8"cond");
+            cmp.dst = bool_val;
+            curr_code.push_back(cmp);
+        }
+        if (!Context[Bool_ptr].BoolTrueLabel.empty() && 
+            !Context[Bool_ptr].BoolFalseLabel.empty()) {
+            BrInst branch;
+            branch.is_conditional = true;
+            branch.condition = bool_val;
+            branch.trueLabel = Context[Bool_ptr].BoolTrueLabel;
+            branch.falseLabel = Context[Bool_ptr].BoolFalseLabel;
+            curr_code.push_back(branch);
+        }
+        else {
+            std::cerr<<"Bool没有可用的label\n";
+            return false;
+        }
+        // 4. 保存当前节点上下文
+        Context[Bool_ptr].code = std::move(curr_code);
+        Context[Bool_ptr].expr_addr = bool_val; // 传递布尔值结果
+    }
+    
     return true;
 }
 
@@ -903,7 +1284,7 @@ inline bool parseCopyNode(AST::ASTNode * node_ptr,IRGenVisitor * IRGenerator) {
     }
     if(node_ptr->subType == AST::ASTSubType::BlockStmt) {
         auto * blockS_ptr = static_cast<AST::BlockStmt *>(node_ptr);
-        Context[node_ptr].code = std::move(Context[blockS_ptr->block_ptr->ItemList_ptr.get()].code);
+        Context[node_ptr].code = std::move(Context[blockS_ptr->block_ptr.get()].code);
         Context.erase(blockS_ptr->block_ptr->ItemList_ptr.get());
     }
     if(node_ptr->subType == AST::ASTSubType::BlockItemList) {
@@ -920,6 +1301,7 @@ inline bool parseCopyNode(AST::ASTNode * node_ptr,IRGenVisitor * IRGenerator) {
                 Context.erase(subItemPtr);
             }   //没有Init Expr的Decl不会有code
         }
+        Context[node_ptr].code = std::move(code);
 
     }
     return true;
@@ -950,6 +1332,10 @@ inline void parseFuncAlloca(FunctionIR & funcir,Semantic::SymbolEntry * func_Ent
         auto allocaInst = parseAlloca(arg.get(),IRGenerator);
         funcir.Instblock.push_back(allocaInst);
     }
+    IR::labelInst start_label;
+    start_label.label = Operand::allocLabel(funcir.funcName);
+    if(!func_Entry->is_block)
+        funcir.Instblock.push_back(start_label);
     for(auto & ent : entries) {
         if(ent->is_block) {
             parseFuncAlloca(funcir,ent.get(),IRGenerator);
@@ -961,18 +1347,11 @@ inline void parseFuncAlloca(FunctionIR & funcir,Semantic::SymbolEntry * func_Ent
 }
 
 
-
-
-
-
-
-
-
-// Definitions (all inline)
-inline bool IRGenVisitor::build(Semantic::SemanticSymbolTable* symtab, AST::AbstractSyntaxTree* astT, IRContent* irbase, EntryOperandMap* entrymap) {
+inline bool IRGenVisitor::build(Semantic::SemanticSymbolTable* symtab, AST::AbstractSyntaxTree* astT, IRContent* irbase,Semantic::ExprTypeCheckMap * expr_type_map , EntryOperandMap* entrymap) {
     rootTable = symtab;
     currentTable = symtab;
     EntrySymMap = entrymap;
+    ExprTypeMap = expr_type_map;
     IRbase = irbase;
     //分为两道pass，第一道pass生成所有全局变量
     if(astT->root->Ntype != AST::ASTType::Program) {
@@ -1058,6 +1437,11 @@ inline bool IRGenVisitor::build(Semantic::SemanticSymbolTable* symtab, AST::Abst
 inline void IRGenVisitor::enter(AST::ASTNode* node) {
     if(gotError) return;
     ASTStack.push(node);
+    if(node->Ntype == AST::ASTType::ASTBool) {
+        parseBoolIRGenENTER(static_cast<AST::ASTBool *>(node),this);
+    } else if(node->Ntype == AST::ASTType::Stmt) {
+        parseControlIRGenENTER(static_cast<AST::Stmt *>(node),this);
+    }
 }
 
 inline void IRGenVisitor::visit(AST::ASTNode* node) {
@@ -1069,6 +1453,25 @@ inline void IRGenVisitor::quit(AST::ASTNode* node) {
     ASTStack.pop();
     if(!ASTStack.empty()) {
         auto parent = ASTStack.top();
+    }
+    if(node->Ntype == AST::ASTType::Expr) {
+        parseExprIRGen(static_cast<AST::Expr *>(node),this);
+    } else if(node->Ntype == AST::ASTType::Stmt) {
+        parseStmtIRGen(static_cast<AST::Stmt *>(node),this);
+        parseControlIRGenQUIT(static_cast<AST::Stmt *>(node),this);
+    } else if(node->Ntype == AST::ASTType::ASTBool) {
+        parseBoolIRGenQUIT(static_cast<AST::ASTBool *>(node),this);
+    } else if(node->subType == AST::ASTSubType::IdDeclare) {
+        parseIdInitIRGen(static_cast<AST::IdDeclare *>(node),this);
+    }
+    parseCopyNode(node,this);
+    if(node->subType == AST::ASTSubType::Block) {
+        if(ASTStack.empty()) {
+            auto & context = ContextMap.at(node);
+            curr_fucntion_ir->Instblock.insert(curr_fucntion_ir->Instblock.end(),
+                context.code.begin(),context.code.end());
+            ContextMap.erase(node);
+        }
     }
 }
 
@@ -1119,13 +1522,18 @@ inline void test_IR_main() {
     std::u8string myprogram2 = u8R"(
     int acc =1;
     float **** b;
-    int main2(int c [][30] ;float b ) {
+    int main2(int c [][30] ;float b; int s (int,int) ) {
         int a = 5;
+        a = s(1,5);
+        s(2,6);
     }
     int main(int p;float L) {
+        int ps;
+        ps = 5;
         int a = 200 * 4.11111;
         int * refa = &a;
         *refa = 4.2;
+        a = *refa;
         a= 5;
         int q = 4;
         if(4 <= 3) {
@@ -1135,29 +1543,29 @@ inline void test_IR_main() {
         {
             int q = 20 + 14;
             q = 20.2;
-            main(4,4.2);
+            q = main(4,4.2);
         }
         q = 4.2;
         a = 16 * 5 + 8.9;
         int b = 8;
         int c [10][30];
+        int ** headc = c;
+        int * tmp = &c[10][30];
         c[0][0] = 0;
-        main2 (c , 5.4);
+        b = main2 (c , 5.4,main);
     }
     float q = 4.2;
     
     )";
     //     std::u8string myprogram2 = u8R"(
-    // int main() {
-    //     int a = 1;
-    //     int b = 2;
-    //     int c = 1 + 2 * 3 + (4 + 5) * 6;
-    //     if(a+b<c) {
-    //         a = a + b;
-    //         b = b + a;
+    // int main(float q) {
+    //     int a = 20 + 14;
+    //     int b = a + 7;
+    //     int c = b + 8;
+    //     int d = c + 10;
+    //     while(a>b && (c>c || c>d) || d>d) {
+    //         b = 14;
     //     }
-    //     else
-    //         c=1000;
     //     return 0;
     // }
     // )";
@@ -1183,11 +1591,11 @@ inline void test_IR_main() {
     astT.root->accept(v2);
     Semantic::ExprTypeCheckMap ExprMap;
     v5.build(&tmp,&astT,&ExprMap);
-
+    tmp.arrangeMem();
     IRContent irbase;
     EntryOperandMap entry_map;
     IR::IRGenVisitor v6;
-    v6.build(&tmp,&astT,&irbase,&entry_map);
+    v6.build(&tmp,&astT,&irbase,&ExprMap,&entry_map);
     irbase.print();
     std::cout<<"stop\n";
     return;

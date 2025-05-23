@@ -11,7 +11,7 @@ TypeList -> epsilon | Type , TypeList | Type
 Arg -> Type id | Type id [ ] Dimensions | Type id ( TypeList )      //支持 int a [][3][4]等数组指针定义
 Stmt -> id = Expr ; | Expr = Expr ; | if ( Bool ) Stmt | if ( Bool ) Stmt else Stmt | while ( Bool ) Stmt | return Expr ; | Block | id ( ParamList ) ; | return ; | print Expr ;
 Expr -> num | flo | & id | id | Expr [ Expr ] | * Expr | Expr + Expr | Expr * Expr | ( Expr ) | id ( ParamList )  
-Bool -> Expr rop Expr | Expr  
+Bool -> Expr rop Expr | Expr | Bool and Bool | Bool or Bool | ( Bool )
 ParamList -> epsilon | Param , ParamList | Param
 Param -> Expr                                        // 仅 id 就原生支持所有类型 | id [ ] | id ( ) //传入数组指针，函数指针
 //主要修改

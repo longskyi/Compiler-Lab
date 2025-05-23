@@ -5,3 +5,6 @@ Expr -> Expr * Expr  \  *       //符号优先级
 Expr -> Expr + Expr  \  +         //结合性
 Expr -> * Expr \ *              //左结合性
 Expr -> * Expr \ +
+Bool -> Bool and Bool \ or
+Bool -> Bool and Bool \ and
+Bool -> Bool or Bool \ or

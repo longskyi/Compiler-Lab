@@ -12,15 +12,25 @@ enum ROP_ENUM {
     G,  //greater
     NoneROP,
 };
+enum BOOLOP_ENUM {
+    BOOLAND,
+    BOOLOR,
+    BOOLNone
+};
 
 class ASTBool : public ASTNode
 {
 public:
+    bool isBoolOperation = false;
     unique_ptr<Expr> Lval_ptr;
     ROP_ENUM rop = NoneROP;
+    BOOLOP_ENUM BoolOP = BOOLNone;
     unique_ptr<Expr> Rval_ptr;
-    static constexpr std::array<std::u8string_view,2> SupportProd=
-    {u8"Bool -> Expr rop Expr",u8"Bool -> Expr" };
+    unique_ptr<ASTBool> LBool;
+    unique_ptr<ASTBool> RBool;
+    static constexpr std::array<std::u8string_view,5> SupportProd=
+    {u8"Bool -> Expr rop Expr",u8"Bool -> Expr",u8"Bool -> Bool and Bool",u8"Bool -> Bool or Bool" ,
+        u8"Bool -> ( Bool )"};
     inline ASTBool(/* args */) {
         this->Ntype = ASTType::ASTBool;
         this->subType = ASTSubType::ASTBool;
@@ -83,8 +93,50 @@ public:
 
             return newNode;
         }
+        case 2:
+        {
+            // bool and bool
+            assert(NonTnode->childs.size() == 3);
+            assert(dynamic_cast<ASTBool *>(NonTnode->childs[0].get()) && "不是Bool类型节点");
+
+            auto newNode = std::make_unique<ASTBool>();
+            newNode->isBoolOperation = true;
+            newNode->LBool.reset(static_cast<ASTBool *>(NonTnode->childs[0].release()));
+            newNode->RBool.reset(static_cast<ASTBool *>(NonTnode->childs[2].release()));
+            
+            newNode->BoolOP = BOOLAND;
+
+            return newNode;
+        }
+        case 3:
+        {
+            // bool or bool
+            assert(NonTnode->childs.size() == 3);
+            assert(dynamic_cast<ASTBool *>(NonTnode->childs[0].get()) && "不是Bool类型节点");
+
+            auto newNode = std::make_unique<ASTBool>();
+            newNode->isBoolOperation = true;
+            newNode->LBool.reset(static_cast<ASTBool *>(NonTnode->childs[0].release()));
+            newNode->RBool.reset(static_cast<ASTBool *>(NonTnode->childs[2].release()));
+            
+            newNode->BoolOP = BOOLOR;
+
+            return newNode;
+        }
+        case 4:
+        {
+            // ( bool )
+            assert(NonTnode->childs.size() == 3);
+            assert(dynamic_cast<ASTBool *>(NonTnode->childs[1].get()) && "不是Bool类型节点");
+
+            unique_ptr<ASTBool> stoleNode = nullptr;
+            
+            stoleNode.reset(static_cast<ASTBool *>(NonTnode->childs[1].release()));
+            
+            return stoleNode;
+        }
         default:
-            std::cerr <<"Not implement ArithExpr Node :"<< targetProd<<std::endl;
+            std::cerr <<"Not implement ASTBool Node :"<< targetProd<<std::endl;
             return nullptr;
         }
     }
@@ -93,9 +145,15 @@ public:
     }
     inline void accept(ASTVisitor & visitor) override {
         visitor.enter(this);
-        Lval_ptr->accept(visitor);
-        if(this->rop != ROP_ENUM::NoneROP) {
-            Rval_ptr->accept(visitor);
+        if(!isBoolOperation) {
+            Lval_ptr->accept(visitor);
+            if(this->rop != ROP_ENUM::NoneROP) {
+                Rval_ptr->accept(visitor);
+            }
+        }
+        else {
+            LBool->accept(visitor);
+            RBool->accept(visitor);
         }
         visitor.visit(this);
         visitor.quit(this);

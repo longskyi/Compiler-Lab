@@ -50,6 +50,12 @@ public:
     }
     inline bool checkTyping() {
         bool ret = true;
+        for(const auto & et : Args) {
+            if(!et->Type.check()) {
+                std::cerr<<"Symbol:"<<toString_view(et->symbolName)<<"不合法的类型"<<toString_view(et->Type.format())<<std::endl;
+                ret = false;
+            }
+        }
         for(const auto & et : entries) {
             if(et->is_block) {
                 ret = ret && et->subTable->checkTyping();
@@ -64,8 +70,26 @@ public:
         }
         return ret;
     }
-    inline void allocMem() {
-        //填充offset和size字段
+    inline void arrangeMem() {
+        //填充offset和size和align字段
+        bool ret = true;
+        for(const auto & et : Args) {
+            et->entrysize = et->Type.sizeoff();
+            et->alignment = et->Type.alignmentof();
+        }
+        for(const auto & et : entries) {
+            if(et->is_block) {
+                et->subTable->arrangeMem();
+            }
+            else if(et->Type.basicType == AST::FUNC) {
+                et->subTable->arrangeMem();
+            }
+            else {
+                et->entrysize = et->Type.sizeoff();
+                et->alignment = et->Type.alignmentof();
+            }
+        }
+
     }
     inline SymbolEntry * lookup(const std::u8string_view & name) {
         for(const auto & sym : entries) {

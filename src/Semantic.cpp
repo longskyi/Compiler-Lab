@@ -28,7 +28,7 @@ bool parseExprCheck(AST::Expr * mainExpr_ptr , ExprTypeCheckMap & ExprMap) {
         }
         auto [canBeLval,Symstype] = ret.value();
         //如果被解引用后成了左值，那么被解引用前被视为右值
-        ExprMap.at(subExpr_ptr).ret_is_left_value = ExprMap.at(subExpr_ptr).ret_is_left_value && !canBeLval;
+        ExprMap.at(subExpr_ptr).ret_is_left_value = false;//ExprMap.at(subExpr_ptr).ret_is_left_value && !canBeLval;
         TypingCheckNode currNode;
         currNode.retType = std::move(Symstype);
         currNode.ret_is_left_value = canBeLval;
@@ -103,6 +103,9 @@ bool parseExprCheck(AST::Expr * mainExpr_ptr , ExprTypeCheckMap & ExprMap) {
         auto Rexpr_ptr =Expr_ptr->Rval_ptr.get();
         auto & Lexpr_Typing_Node = ExprMap.at(Lexpr_ptr);
         auto & Rexpr_Typing_Node = ExprMap.at(Rexpr_ptr);
+        //新增修改，对于Arith，要求底下都变成right value
+        Lexpr_Typing_Node.ret_is_left_value = false;
+        Rexpr_Typing_Node.ret_is_left_value = false;
         const auto & Ltype = Lexpr_Typing_Node.retType;
         const auto & Rtype = Rexpr_Typing_Node.retType;
         if(Expr_ptr->Op == AST::ADD) 
@@ -235,9 +238,7 @@ bool parseExprCheck(AST::Expr * mainExpr_ptr , ExprTypeCheckMap & ExprMap) {
             std::cerr<<"运算符Not implement"<<std::endl;
             return false;
         }
-        //新增修改，对于Arith，要求底下都变成right value
-        Lexpr_Typing_Node.ret_is_left_value = false;
-        Rexpr_Typing_Node.ret_is_left_value = false;
+        
         //
         
     }
@@ -335,9 +336,9 @@ bool parseStmtCheck(AST::Stmt * mainStmt_ptr, ExprTypeCheckMap & ExprMap) {
     }
     if(dynamic_cast<AST::Assign *>(mainStmt_ptr)) {
         auto Stmt_ptr = static_cast<AST::Assign *>(mainStmt_ptr);
-        auto RNode = ExprMap.at(Stmt_ptr->Rexpr_ptr.get());
+        auto & RNode = ExprMap.at(Stmt_ptr->Rexpr_ptr.get());
         if(Stmt_ptr->Lexpr_ptr) {
-            auto LNode = ExprMap.at(Stmt_ptr->Lexpr_ptr.get());
+            auto & LNode = ExprMap.at(Stmt_ptr->Lexpr_ptr.get());
             if(!LNode.ret_is_left_value) {
                 std::cerr<<"=左侧不能是右值"<<std::endl;
                 return false;
@@ -402,7 +403,7 @@ bool parseStmtCheck(AST::Stmt * mainStmt_ptr, ExprTypeCheckMap & ExprMap) {
     }
     if(dynamic_cast<AST::StmtPrint *>(mainStmt_ptr)) {
         auto Stmt_ptr = static_cast<AST::StmtPrint *>(mainStmt_ptr);
-        auto RNode = ExprMap.at(Stmt_ptr->expr_ptr.get());
+        auto & RNode = ExprMap.at(Stmt_ptr->expr_ptr.get());
         if(RNode.retType.basicType != AST::baseType::INT) {
             std::cerr<<"目前print只支持打印INT类型\n";
             return false;
@@ -418,124 +419,125 @@ bool parseBoolCheck(AST::ASTBool * ASTbool_ptr , ExprTypeCheckMap & ExprMap) {
         std::cout<<std::format("Bool检查失败，空指针错误\n");
         return false;
     }
-    
-    auto Lval = ASTbool_ptr->Lval_ptr.get();
-    auto& Lnode = ExprMap[Lval];
-    
-    // 1. 处理无比较运算符的情况（直接转换为bool）
-    if(ASTbool_ptr->rop == AST::NoneROP) {
-        Lnode.ret_is_left_value = false; // 作为条件表达式总是右值
+    if(!ASTbool_ptr->isBoolOperation) {
+        auto Lval = ASTbool_ptr->Lval_ptr.get();
+        auto& Lnode = ExprMap[Lval];
         
-        // 检查类型是否可转换为bool
-        switch(Lnode.retType.basicType) {
-            case AST::VOID:
-                std::cerr << std::format("错误：void类型不能转换为bool\n");
+        // 1. 处理无比较运算符的情况（直接转换为bool）
+        if(ASTbool_ptr->rop == AST::NoneROP) {
+            Lnode.ret_is_left_value = false; // 作为条件表达式总是右值
+            
+            // 检查类型是否可转换为bool
+            switch(Lnode.retType.basicType) {
+                case AST::VOID:
+                    std::cerr << std::format("错误：void类型不能转换为bool\n");
+                    return false;
+                case AST::ARRAY:
+                    // 数组退化为指针
+                    Lnode.castType = Lnode.retType;
+                    Lnode.castType.basicType = AST::BASE_PTR;
+                    Lnode.castType.array_len = 0;
+                    Lnode.cast_op = AST::ARRAY_TO_PTR;
+                    break;
+                case AST::FUNC:
+                    // 函数退化为函数指针
+                    Lnode.castType = Lnode.retType;
+                    Lnode.castType.basicType = AST::FUNC_PTR;
+                    Lnode.cast_op = AST::FUNC_TO_PTR;
+                    break;
+                default: // INT, FLOAT, PTR等类型可以直接作为bool
+                    break;
+            }
+            return true;
+        }
+        
+        // 2. 处理有比较运算符的情况
+        auto Rval = ASTbool_ptr->Rval_ptr.get();
+        auto& Rnode = ExprMap[Rval];
+        
+        // 两边都不能是void
+        if(Lnode.retType.basicType == AST::VOID || Rnode.retType.basicType == AST::VOID) {
+            std::cerr << std::format("错误：void类型不能参与比较\n");
+            return false;
+        }
+        
+        // 处理数组退化
+        if(Lnode.retType.basicType == AST::ARRAY) {
+            Lnode.castType = Lnode.retType;
+            Lnode.castType.basicType = AST::BASE_PTR;
+            Lnode.castType.array_len = 0;
+            Lnode.cast_op = AST::ARRAY_TO_PTR;
+        }
+        if(Rnode.retType.basicType == AST::ARRAY) {
+            Rnode.castType = Rnode.retType;
+            Rnode.castType.basicType = AST::BASE_PTR;
+            Rnode.castType.array_len = 0;
+            Rnode.cast_op = AST::ARRAY_TO_PTR;
+        }
+        
+        // 处理函数退化
+        if(Lnode.retType.basicType == AST::FUNC) {
+            Lnode.castType = Lnode.retType;
+            Lnode.castType.basicType = AST::FUNC_PTR;
+            Lnode.cast_op = AST::FUNC_TO_PTR;
+        }
+        if(Rnode.retType.basicType == AST::FUNC) {
+            Rnode.castType = Rnode.retType;
+            Rnode.castType.basicType = AST::FUNC_PTR;
+            Rnode.cast_op = AST::FUNC_TO_PTR;
+        }
+        
+        // 获取实际比较类型（考虑可能的转换后类型）
+        const auto& Ltype = (Lnode.cast_op != AST::NO_OP) ? Lnode.castType : Lnode.retType;
+        const auto& Rtype = (Rnode.cast_op != AST::NO_OP) ? Rnode.castType : Rnode.retType;
+        
+        // 检查类型是否可比较
+        if(Ltype.basicType == AST::FLOAT || Rtype.basicType == AST::FLOAT) {
+            // 涉及float的比较
+            if(Ltype.basicType != AST::FLOAT && Ltype.basicType != AST::INT) {
+                std::cerr << std::format("错误：类型{}不能与float比较\n", toString_view(Ltype.format()));
                 return false;
-            case AST::ARRAY:
-                // 数组退化为指针
-                Lnode.castType = Lnode.retType;
-                Lnode.castType.basicType = AST::BASE_PTR;
-                Lnode.castType.array_len = 0;
-                Lnode.cast_op = AST::ARRAY_TO_PTR;
-                break;
-            case AST::FUNC:
-                // 函数退化为函数指针
-                Lnode.castType = Lnode.retType;
-                Lnode.castType.basicType = AST::FUNC_PTR;
-                Lnode.cast_op = AST::FUNC_TO_PTR;
-                break;
-            default: // INT, FLOAT, PTR等类型可以直接作为bool
-                break;
+            }
+            if(Rtype.basicType != AST::FLOAT && Rtype.basicType != AST::INT) {
+                std::cerr << std::format("错误：类型{}不能与float比较\n", toString_view(Rtype.format()));
+                return false;
+            }
+            
+            // 需要int转float
+            if(Ltype.basicType == AST::INT) {
+                Lnode.castType.basicType = AST::FLOAT;
+                Lnode.cast_op = AST::INT_TO_FLOAT;
+            }
+            if(Rtype.basicType == AST::INT) {
+                Rnode.castType.basicType = AST::FLOAT;
+                Rnode.cast_op = AST::INT_TO_FLOAT;
+            }
+        } 
+        else if(Ltype.basicType == AST::BASE_PTR || Rtype.basicType == AST::BASE_PTR) {
+            // 指针比较
+            if(Ltype.basicType != AST::BASE_PTR || Rtype.basicType != AST::BASE_PTR) {
+                std::cerr << std::format("错误：指针只能与指针比较\n");
+                return false;
+            }
+            
+            // 检查指针类型是否兼容
+            if(!AST::SymType::equals(Ltype, Rtype)) {
+                std::cerr << std::format("错误：不兼容的指针类型比较: {} 和 {}\n", 
+                    toString_view(Ltype.format()), toString_view(Rtype.format()));
+                return false;
+            }
         }
-        return true;
-    }
-    
-    // 2. 处理有比较运算符的情况
-    auto Rval = ASTbool_ptr->Rval_ptr.get();
-    auto& Rnode = ExprMap[Rval];
-    
-    // 两边都不能是void
-    if(Lnode.retType.basicType == AST::VOID || Rnode.retType.basicType == AST::VOID) {
-        std::cerr << std::format("错误：void类型不能参与比较\n");
-        return false;
-    }
-    
-    // 处理数组退化
-    if(Lnode.retType.basicType == AST::ARRAY) {
-        Lnode.castType = Lnode.retType;
-        Lnode.castType.basicType = AST::BASE_PTR;
-        Lnode.castType.array_len = 0;
-        Lnode.cast_op = AST::ARRAY_TO_PTR;
-    }
-    if(Rnode.retType.basicType == AST::ARRAY) {
-        Rnode.castType = Rnode.retType;
-        Rnode.castType.basicType = AST::BASE_PTR;
-        Rnode.castType.array_len = 0;
-        Rnode.cast_op = AST::ARRAY_TO_PTR;
-    }
-    
-    // 处理函数退化
-    if(Lnode.retType.basicType == AST::FUNC) {
-        Lnode.castType = Lnode.retType;
-        Lnode.castType.basicType = AST::FUNC_PTR;
-        Lnode.cast_op = AST::FUNC_TO_PTR;
-    }
-    if(Rnode.retType.basicType == AST::FUNC) {
-        Rnode.castType = Rnode.retType;
-        Rnode.castType.basicType = AST::FUNC_PTR;
-        Rnode.cast_op = AST::FUNC_TO_PTR;
-    }
-    
-    // 获取实际比较类型（考虑可能的转换后类型）
-    const auto& Ltype = (Lnode.cast_op != AST::NO_OP) ? Lnode.castType : Lnode.retType;
-    const auto& Rtype = (Rnode.cast_op != AST::NO_OP) ? Rnode.castType : Rnode.retType;
-    
-    // 检查类型是否可比较
-    if(Ltype.basicType == AST::FLOAT || Rtype.basicType == AST::FLOAT) {
-        // 涉及float的比较
-        if(Ltype.basicType != AST::FLOAT && Ltype.basicType != AST::INT) {
-            std::cerr << std::format("错误：类型{}不能与float比较\n", toString_view(Ltype.format()));
-            return false;
-        }
-        if(Rtype.basicType != AST::FLOAT && Rtype.basicType != AST::INT) {
-            std::cerr << std::format("错误：类型{}不能与float比较\n", toString_view(Rtype.format()));
-            return false;
-        }
-        
-        // 需要int转float
-        if(Ltype.basicType == AST::INT) {
-            Lnode.castType.basicType = AST::FLOAT;
-            Lnode.cast_op = AST::INT_TO_FLOAT;
-        }
-        if(Rtype.basicType == AST::INT) {
-            Rnode.castType.basicType = AST::FLOAT;
-            Rnode.cast_op = AST::INT_TO_FLOAT;
-        }
-    } 
-    else if(Ltype.basicType == AST::BASE_PTR || Rtype.basicType == AST::BASE_PTR) {
-        // 指针比较
-        if(Ltype.basicType != AST::BASE_PTR || Rtype.basicType != AST::BASE_PTR) {
-            std::cerr << std::format("错误：指针只能与指针比较\n");
-            return false;
-        }
-        
-        // 检查指针类型是否兼容
-        if(!AST::SymType::equals(Ltype, Rtype)) {
-            std::cerr << std::format("错误：不兼容的指针类型比较: {} 和 {}\n", 
+        else if(Ltype.basicType != Rtype.basicType) {
+            std::cerr << std::format("错误：不兼容的类型比较: {} 和 {}\n", 
                 toString_view(Ltype.format()), toString_view(Rtype.format()));
             return false;
         }
+        
+        // 标记为右值
+        Lnode.ret_is_left_value = false;
+        Rnode.ret_is_left_value = false;
     }
-    else if(Ltype.basicType != Rtype.basicType) {
-        std::cerr << std::format("错误：不兼容的类型比较: {} 和 {}\n", 
-            toString_view(Ltype.format()), toString_view(Rtype.format()));
-        return false;
-    }
-    
-    // 标记为右值
-    Lnode.ret_is_left_value = false;
-    Rnode.ret_is_left_value = false;
-    
+    // and or 的bool表达式本身不需要类型检查
     return true;
 }
 

@@ -124,12 +124,15 @@ unique_ptr<ASTNode> CallExpr::try_constructS(ASTNode * as , AbstractSyntaxTree *
     {
         // id ( ParamList )
         assert(NonTnode->childs.size() == 4);
-        assert(dynamic_cast<SymIdNode *>(NonTnode->childs[0].get()) && "不是sym类型节点");
         assert(dynamic_cast<ParamList *>(NonTnode->childs[2].get()) && "不是paramlist类型节点");
         //assert(dynamic_cast<TermSymNode*>(NonTnode->childs[0].get())->token_type == u8"MUL");
 
         auto newNode = std::make_unique<CallExpr>();
-        newNode->id_ptr.reset(static_cast<SymIdNode*>(NonTnode->childs[0].release()));
+
+        assert(dynamic_cast<TermSymNode *>(NonTnode->childs[0].get())->token_type == u8"ID" && "不是id类型节点");
+        newNode->id_ptr = std::make_unique<SymIdNode>();
+        newNode->id_ptr->Literal = static_cast<TermSymNode*>(NonTnode->childs[0].get())->value;
+        
         newNode->ParamList_ptr.reset(static_cast<ParamList*>(NonTnode->childs[2].release()));
         return newNode;
     }

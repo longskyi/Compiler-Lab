@@ -163,6 +163,10 @@ public:
     LoopType op = LoopType::NOT_INIT_LOOP;
     unique_ptr<ASTBool> bool_ptr;
     unique_ptr<Stmt> stmt_ptr;
+    Loop() {
+        this->Ntype = AST::ASTType::Stmt;
+        this->subType = AST::ASTSubType::Loop;
+    }
     static constexpr std::array<std::u8string_view,1> SupportProd=
     {u8"Stmt -> while ( Bool ) Stmt "};
     static unique_ptr<ASTNode> try_constructS(ASTNode * as , AbstractSyntaxTree * astTree);
