@@ -235,6 +235,10 @@ bool parseExprCheck(AST::Expr * mainExpr_ptr , ExprTypeCheckMap & ExprMap) {
             std::cerr<<"运算符Not implement"<<std::endl;
             return false;
         }
+        //新增修改，对于Arith，要求底下都变成right value
+        Lexpr_Typing_Node.ret_is_left_value = false;
+        Rexpr_Typing_Node.ret_is_left_value = false;
+        //
         
     }
     if(dynamic_cast<AST::IdValueExpr *>(mainExpr_ptr)) {
@@ -311,6 +315,9 @@ bool parseStmtCheck(AST::Stmt * mainStmt_ptr, ExprTypeCheckMap & ExprMap) {
             const auto & argType = idType.TypeList[i].get();
             const auto paramExpr_ptr = paramT->expr_ptr.get();
             //忽略 id_ptr 和 Op
+
+            ExprMap.at(paramExpr_ptr).ret_is_left_value = false;
+
             auto & paramTypeNode = ExprMap.at(paramExpr_ptr);
             auto [cast_op,msg] = paramTypeNode.retType.cast_to(argType);
             if(cast_op == AST::CAST_OP::INVALID) {
@@ -392,6 +399,16 @@ bool parseStmtCheck(AST::Stmt * mainStmt_ptr, ExprTypeCheckMap & ExprMap) {
             std::cerr<<"内部错误，受损的Assign结点";
             return false;
         }
+    }
+    if(dynamic_cast<AST::StmtPrint *>(mainStmt_ptr)) {
+        auto Stmt_ptr = static_cast<AST::StmtPrint *>(mainStmt_ptr);
+        auto RNode = ExprMap.at(Stmt_ptr->expr_ptr.get());
+        if(RNode.retType.basicType != AST::baseType::INT) {
+            std::cerr<<"目前print只支持打印INT类型\n";
+            return false;
+        }
+        RNode.ret_is_left_value = false;
+        return true;
     }
     return true;
 }
@@ -557,6 +574,17 @@ bool parseReturnCheck(AST::Return * return_ptr , SemanticSymbolTable * rootTable
         }
     }
 }  
+
+
+bool parseArgCheck(AST::Arg * Arg_ptr) {
+    const auto & argtype = Arg_ptr->argtype;
+    auto q = argtype.sizeoff();
+    if(q>8) {
+        std::cerr<<std::format("不合法的形参类型{}\n",toString_view(argtype.format()));
+        return false;
+    }
+    return true;
+}
 
 
 } // end namespace Semantic

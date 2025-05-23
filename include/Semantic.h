@@ -38,10 +38,15 @@ public:
     SemanticSymbolTable * outer = nullptr;
     int64_t width = 0;
     size_t abi_alignment = 16; // 向后续处理步骤提出的对齐要求
+    std::vector<unique_ptr<SymbolEntry>> Args;
     std::vector<unique_ptr<SymbolEntry>> entries;
     //该函数不进行检查
     inline void add_entry(unique_ptr<SymbolEntry> entry) noexcept {
         entries.emplace_back(std::move(entry));
+    }
+    inline void add_arg(unique_ptr<SymbolEntry> entry) noexcept {
+        //std::cerr<<"内部错误，非函数表不能添加Arg\n";
+        Args.emplace_back(std::move(entry));
     }
     inline bool checkTyping() {
         bool ret = true;
@@ -68,6 +73,11 @@ public:
                 return sym.get();
             }
         }
+        for(const auto & sym : Args) {
+            if((!sym->is_block) && sym->symbolName == name) {
+                return sym.get();
+            }
+        }
         if(outer) {
             return outer->lookup(name);
         }
@@ -82,21 +92,33 @@ public:
                 return sym.get();
             }
         }
+        for(const auto & sym : Args) {
+            if((!sym->is_block) && sym->symbolName == name) {
+                return sym.get();
+            }
+        }
         return nullptr;
     }
     inline void printTable(int depth = 0 , std::ostream& out = std::cout) {
         auto ptab = [depth](int a = 1){
-            if(a == 0 )
-                for(int i = 0 ; i< depth ; i ++)
-                    std::cout<<"    "; // 4 spaces
-            else
-                for(int i = 0 ; i< depth +1 ; i ++)
-                    std::cout<<"    "; // 4 spaces
+            for(int i = 0 ; i< depth + a ; i ++)
+                std::cout<<"    "; // 4 spaces
         };
         ptab(0);
         out<<std::format("{}@Table[\n",toString_view(tabletag));
-        ptab();
+        ptab(0);
         out<<std::format("width:{} entryNum:{} alignment:{}\n",width,entries.size(),this->abi_alignment);
+        for(int i = 0 ; i<Args.size();i++) {
+            ptab(2);
+            if(Args[i]->is_block) {
+                std::cerr<<"符号表Arg内部错误\n";
+            } else if(Args[i]->Type.basicType == AST::FUNC) {
+                std::cerr<<"符号表Arg内部错误\n";
+            }
+            else {
+                out<<std::format("Arg:(name:{},uniqueId:{},type:{},sizeof:{},align:{})\n",toString_view(Args[i]->symbolName),size_t(Args[i]->symid),toString_view(Args[i]->Type.format()),Args[i]->Type.sizeoff(),Args[i]->Type.alignmentof());
+            }
+        }
         for(int i = 0 ; i<entries.size();i++) {
             ptab();
             if(entries[i]->is_block) {
@@ -107,7 +129,7 @@ public:
                 entries[i]->subTable->printTable(depth+1);
             }
             else {
-                out<<std::format("(name:{},uniqueId:{},type:{},sizeof:{})\n",toString_view(entries[i]->symbolName),size_t(entries[i]->symid),toString_view(entries[i]->Type.format()),entries[i]->Type.sizeoff());
+                out<<std::format("(name:{},uniqueId:{},type:{},sizeof:{},align:{})\n",toString_view(entries[i]->symbolName),size_t(entries[i]->symid),toString_view(entries[i]->Type.format()),entries[i]->Type.sizeoff(),entries[i]->Type.alignmentof());
             }
         }
         ptab(0);
@@ -129,7 +151,7 @@ public:
     std::stack<AST::ASTNode*> defineStack;
     //需要关注 block，以及函数定义-block联合体
 
-    void enter(AST::ASTNode* node) {
+    inline void enter(AST::ASTNode* node) {
         if(gotError) return;
         if(dynamic_cast<AST::FuncDeclare *>(node)) {
             if(currentTable->outer != nullptr) {
@@ -188,7 +210,7 @@ public:
         defineStack.push(node);
     }
     int InnerState = 0;
-    void visit(AST::ASTNode* node) {
+    inline void visit(AST::ASTNode* node) {
         if(gotError) return;
         if(dynamic_cast<AST::IdDeclare *>(node)) {
             auto idDecl_ptr = static_cast<AST::IdDeclare *>(node);
@@ -215,11 +237,11 @@ public:
                 entry_ptr->symbolName = arg_ptr->id_ptr->Literal;
                 entry_ptr->Type = arg_ptr->argtype;
                 arg_ptr->id_ptr->symEntryPtr = entry_ptr.get();
-                currentTable->add_entry(std::move(entry_ptr));
+                currentTable->add_arg(std::move(entry_ptr));
             }
         }
     }
-    void quit(AST::ASTNode* node) {
+    inline void quit(AST::ASTNode* node) {
         if(gotError) return;
         if(defineStack.empty()) {
             std::cerr<<"符号表生成 栈深度结构损坏"<<std::endl;
@@ -260,7 +282,7 @@ public:
         }
     }
 
-    bool build(SemanticSymbolTable * root , AST::AbstractSyntaxTree * tree) {
+    inline bool build(SemanticSymbolTable * root , AST::AbstractSyntaxTree * tree) {
         defineStack = std::stack<AST::ASTNode*>();
         InnerState = 0;
         if(root == nullptr) {
@@ -353,6 +375,8 @@ using ArgTypeCheckMap = std::unordered_map<AST::Arg *,TypingCheckNode>;
 
 bool parseExprCheck(AST::Expr * mainExpr_ptr , ExprTypeCheckMap & ExprMap);
 
+bool parseArgCheck(AST::Arg * Arg_ptr);
+
 //不包含return检查
 bool parseStmtCheck(AST::Stmt * mainStmt_ptr, ExprTypeCheckMap & ExprMap);
 
@@ -380,6 +404,8 @@ public:
         if(gotERROR) {
             std::cerr<<"类型检查未通过\n";
         }
+        else 
+            std::cout<<"类型检查pass完成\n";
         return false;
     }
     
@@ -401,6 +427,9 @@ public:
         }
         if(node->Ntype == AST::ASTType::ASTBool) {
             gotERROR |= ! parseBoolCheck(static_cast<AST::ASTBool *>(node),*ExprMap);
+        }
+        if(node->Ntype == AST::ASTType::Arg) {
+            gotERROR |= ! parseArgCheck(static_cast<AST::Arg *>(node));
         }   
     }
     inline void quit(AST::ASTNode * node) override {
@@ -418,6 +447,36 @@ public:
             FuncStack.pop();
         }
         auto parent = ASTstack.top();
+        if(ASTstack.empty()) return;
+        ASTstack.pop();
+        if(ASTstack.empty())  {
+            ASTstack.push(parent);
+            return;
+        }
+        auto pparent = ASTstack.top();
+        ASTstack.push(parent);
+        if(pparent->Ntype != AST::ASTType::Program) return;
+
+        if(node->subType == AST::ASTSubType::IdDeclare) { 
+            //全局变量声明 必须是常量检查
+            auto id_node_Ptr = static_cast<AST::IdDeclare *>(node);
+            if(id_node_Ptr->initExpr.has_value()) {
+                auto InitExpr = id_node_Ptr->initExpr.value().get();
+                if(InitExpr->subType != AST::ASTSubType::ConstExpr) {
+                    gotERROR = true;
+                    std::cerr<<"错误：全局变量初始值必须是常量\n";
+                    return;
+                }
+            }
+            else {
+                return;
+            }
+        }
+        if(node->Ntype == AST::ASTType::Stmt) {
+            gotERROR = true;
+            std::cerr<<"错误，不允许在函数外出现表达式\n";
+            return;
+        }
     }
 };
 
@@ -532,7 +591,7 @@ inline void test_Semantic_main() {
         int a = 200 * 4.11111;
         int * refa = &a;
         *refa = 4.2;
-        *(a + 1) = 5;
+        a= 5;
         int q = 4;
         if(4 <= 3) {
             int b = 8;
@@ -541,6 +600,7 @@ inline void test_Semantic_main() {
         {
             int q = 20 + 14;
             q = 20.2;
+            main(4,4.2);
         }
         q = 4.2;
         a = 16 * 5 + 8.9;
@@ -552,6 +612,20 @@ inline void test_Semantic_main() {
     float q = 4.2;
     
     )";
+    //     std::u8string myprogram2 = u8R"(
+    // int main() {
+    //     int a = 1;
+    //     int b = 2;
+    //     int c = 1 + 2 * 3 + (4 + 5) * 6;
+    //     if(a+b<c) {
+    //         a = a + b;
+    //         b = b + a;
+    //     }
+    //     else
+    //         c=1000;
+    //     return 0;
+    // }
+    // )";
     auto ss2 = Lexer::scan(toU8str(myprogram2));
     for(int i= 0 ;i < ss2.size() ; i++) {
         auto q = ss2[i];

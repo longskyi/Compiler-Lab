@@ -9,6 +9,7 @@
 #include"lcmpfileio.h"
 //#include"DFA.h"
 //#include"lexer.h"
+#include "irGen.h"
 #include "Semantic.h"
 #include"parserGen.h"
 #include"AST/AST.h"
@@ -20,7 +21,8 @@ int main()
     //LCMPFileIO::test_main_strProd(fs::path(u8"c:/code/CPP/Compiler-Lab/grammar/SLR1ConflictReslove.txt"));
     AST::test_typeSystem_main();
     //AST::AST_test_main();
-    Semantic::test_Semantic_main();
+    //Semantic::test_Semantic_main();
+    IR::test_IR_main();
     return 0;
     //NFA_NS::test_regex_to_dfa();
     //Lexer::test_main_u8();
