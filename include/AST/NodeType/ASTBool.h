@@ -10,6 +10,7 @@ enum ROP_ENUM {
     LE, //lower equal
     L,  //lower
     G,  //greater
+    EQ,
     NoneROP,
 };
 enum BOOLOP_ENUM {
@@ -74,6 +75,8 @@ public:
                 newNode->rop = ROP_ENUM::LE;
             } else if(rop_ptr->value == u8">") {
                 newNode->rop = ROP_ENUM::G;
+            } else if(rop_ptr->value == u8"==") {
+            newNode->rop = ROP_ENUM::EQ;
             } else {
                 std::cerr<<"ROP not implement"<<toString_view(rop_ptr->value)<<std::endl;
                 return nullptr;

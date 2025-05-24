@@ -33,11 +33,39 @@ public:
 };
 
 class SemanticSymbolTable {
+private:
+    inline int64_t culBlockMem() {
+        for(const auto & et : entries) {
+            if(et->is_block) {
+                et->entrysize = et->subTable->culBlockMem();
+            }
+        }
+        std::sort(entries.begin(),entries.end(),[](unique_ptr<SymbolEntry> &a,unique_ptr<SymbolEntry> &b){
+            return a->alignment > b->alignment;
+        });
+        size_t curr_head = 0;
+        for(auto & et : entries) {
+            size_t entSize = et->entrysize;
+            size_t offset = (curr_head + entSize + et->alignment - 1) / et->alignment * et->alignment;
+            et->offset = offset;
+            curr_head = offset;
+        }
+        this->width = curr_head;
+        return curr_head;
+    }
+    inline void arrangeBlockMem(int64_t baseOffset) {
+        for(auto &et : entries) {
+            et->offset += baseOffset;
+            if(et->is_block) {
+                et->subTable->arrangeBlockMem(et->offset - et->entrysize);
+            }
+        }   
+    }
 public:
     std::u8string tabletag; //this is not a key;
     SemanticSymbolTable * outer = nullptr;
     int64_t width = 0;
-    size_t abi_alignment = 16; // 向后续处理步骤提出的对齐要求
+    int64_t abi_alignment = 16; // 向后续处理步骤提出的对齐要求
     std::vector<unique_ptr<SymbolEntry>> Args;
     std::vector<unique_ptr<SymbolEntry>> entries;
     //该函数不进行检查
@@ -72,14 +100,18 @@ public:
     }
     inline void arrangeMem() {
         //填充offset和size和align字段
-        bool ret = true;
+        
+        int64_t max_align = this->abi_alignment;
         for(const auto & et : Args) {
             et->entrysize = et->Type.sizeoff();
             et->alignment = et->Type.alignmentof();
+            max_align = std::max(max_align,et->alignment);
         }
         for(const auto & et : entries) {
             if(et->is_block) {
+                et->subTable->abi_alignment = 4;
                 et->subTable->arrangeMem();
+                max_align = std::max(max_align,et->subTable->abi_alignment);
             }
             else if(et->Type.basicType == AST::FUNC) {
                 et->subTable->arrangeMem();
@@ -87,7 +119,40 @@ public:
             else {
                 et->entrysize = et->Type.sizeoff();
                 et->alignment = et->Type.alignmentof();
+                max_align = std::max(max_align,et->alignment);
             }
+        }
+        this->abi_alignment = max_align;
+        if(outer!=nullptr && outer->outer == nullptr) {
+            //是函数
+            for(const auto & et : entries) {
+                if(et->is_block) {
+                    et->entrysize = et->subTable->culBlockMem();
+                }
+            }
+            std::sort(entries.begin(),entries.end(),[](unique_ptr<SymbolEntry> &a,unique_ptr<SymbolEntry> &b){
+                return a->alignment > b->alignment;
+            });
+            size_t curr_head = 0;
+            for(auto & et : Args) {
+                size_t entSize = et->entrysize;
+                size_t offset = (curr_head + entSize + et->alignment - 1) / et->alignment * et->alignment;
+                et->offset = offset;
+                curr_head = offset;
+            }
+            for(auto & et : entries) {
+                size_t entSize = et->entrysize;
+                size_t offset = (curr_head + entSize + et->alignment - 1) / et->alignment * et->alignment;
+                et->offset = offset;
+                curr_head = offset;
+                if(et->is_block) {
+                    et->subTable->arrangeBlockMem(et->offset - et->entrysize);
+                }
+            }
+            this->width = curr_head;
+        }
+        else {
+            return;
         }
 
     }
@@ -140,7 +205,7 @@ public:
                 std::cerr<<"符号表Arg内部错误\n";
             }
             else {
-                out<<std::format("Arg:(name:{},uniqueId:{},type:{},sizeof:{},align:{})\n",toString_view(Args[i]->symbolName),size_t(Args[i]->symid),toString_view(Args[i]->Type.format()),Args[i]->Type.sizeoff(),Args[i]->Type.alignmentof());
+                out<<std::format("Arg:(name:{},uniqueId:{},type:{},offset:{},sizeof:{},align:{})\n",toString_view(Args[i]->symbolName),size_t(Args[i]->symid),toString_view(Args[i]->Type.format()),Args[i]->offset,Args[i]->Type.sizeoff(),Args[i]->Type.alignmentof());
             }
         }
         for(int i = 0 ; i<entries.size();i++) {
@@ -153,7 +218,7 @@ public:
                 entries[i]->subTable->printTable(depth+1);
             }
             else {
-                out<<std::format("(name:{},uniqueId:{},type:{},sizeof:{},align:{})\n",toString_view(entries[i]->symbolName),size_t(entries[i]->symid),toString_view(entries[i]->Type.format()),entries[i]->Type.sizeoff(),entries[i]->Type.alignmentof());
+                out<<std::format("(name:{},uniqueId:{},type:{},offset:{},sizeof:{},align:{})\n",toString_view(entries[i]->symbolName),size_t(entries[i]->symid),toString_view(entries[i]->Type.format()),entries[i]->offset,entries[i]->Type.sizeoff(),entries[i]->Type.alignmentof());
             }
         }
         ptab(0);
@@ -396,6 +461,8 @@ FuncDecalre -> Block -> return Expr ; | return ;
 using ExprTypeCheckMap = std::unordered_map<AST::Expr *,TypingCheckNode>;
 using ArgTypeCheckMap = std::unordered_map<AST::Arg *,TypingCheckNode>;
 
+//对于decl里的特殊assign检查
+bool parseIdDeclInitCheck(AST::IdDeclare * decl,ExprTypeCheckMap & ExprMap);
 
 bool parseExprCheck(AST::Expr * mainExpr_ptr , ExprTypeCheckMap & ExprMap);
 
@@ -455,6 +522,9 @@ public:
         if(node->Ntype == AST::ASTType::Arg) {
             gotERROR |= ! parseArgCheck(static_cast<AST::Arg *>(node));
         }   
+        if(node->subType == AST::ASTSubType::IdDeclare) {
+            gotERROR |= ! parseIdDeclInitCheck(static_cast<AST::IdDeclare *>(node),*ExprMap);
+        }
     }
     inline void quit(AST::ASTNode * node) override {
         if(ASTstack.empty()) {

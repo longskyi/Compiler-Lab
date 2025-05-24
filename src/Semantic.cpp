@@ -4,6 +4,45 @@
 namespace Semantic {
 
 
+bool parseIdDeclInitCheck(AST::IdDeclare * decl,ExprTypeCheckMap & ExprMap) {
+    if(!decl->initExpr.has_value()) return true;
+    //auto Stmt_ptr = static_cast<AST::Assign *>(mainStmt_ptr);
+    auto & RNode = ExprMap.at(decl->initExpr.value().get());
+
+    auto Se_ptr =  static_cast<SymbolEntry*>(decl->id_ptr->symEntryPtr) ;
+    auto Ltype = Se_ptr->Type;
+    bool L_is_left_value = true;
+    if(Ltype.basicType == AST::FUNC || Ltype.basicType == AST::ARRAY) {
+        L_is_left_value = false;
+    }
+    if(!L_is_left_value) {
+        std::cerr<<"=左侧不能是右值"<<std::endl;
+        return false;
+    }
+    RNode.ret_is_left_value = false;
+    if(AST::SymType::equals(Ltype,RNode.retType)) {
+
+    }
+    else {
+        auto [cast_op , msg] = RNode.retType.cast_to(&Ltype);
+        if(cast_op == AST::CAST_OP::INVALID) {
+            std::cerr<<std::format("assign，类型转换失败，源类型{}，无法转换成{}\n",
+                toString_view(RNode.retType.format()),
+                toString_view(Ltype.format())
+            );
+            return false;
+        }
+        else {
+            if(!msg.empty()) {
+                std::cerr<<"类型转换警告："<<toString_view(msg)<<std::endl;
+            }
+            RNode.castType = AST::SymType(Ltype);
+            RNode.cast_op = cast_op;
+        }
+    }
+    return true;
+}
+
 bool parseExprCheck(AST::Expr * mainExpr_ptr , ExprTypeCheckMap & ExprMap) {
     if(mainExpr_ptr == nullptr) {
         std::cout<<std::format("Expr检查失败，空指针错误\n");

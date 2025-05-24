@@ -73,3 +73,46 @@ Expr -> i | f | d | d [ Expr ] | Expr + Expr | Expr * Expr | ( Expr ) | d ( Para
 Bool -> Expr r Expr | Expr
 ParamList -> epsilon | ParamList Param ,
 Param -> Expr | d [ ] | d ( )
+
+
+P -> D' S'
+D' -> epsilon | D' D ;
+D -> T id | T id [ i ] | T id ( A' ) { D' S' }
+T -> int | float | void
+A' -> epsilon | A' A ;
+A -> T id | T id [ ] | T id ( T )
+S' -> S | S' ; S
+S -> id = E | id [ E ] = E | if ( B ) S | if ( B ) S else S | while ( B ) S | return E | { S' } | id ( R' )
+E -> i | f | id | id [ E ] | E + E | E * E | ( E ) | id ( R' )
+B -> E r E | E
+R' -> epsilon | R' R ,
+R -> E | id [ ] | id ( )
+
+
+
+
+
+
+Program -> BlockItemList
+BlockItemList -> epsilon | BlockItemList BlockItem
+BlockItem -> Decl | Stmt
+Block -> { BlockItemList }  
+Type -> BaseType | Type *  
+BaseType -> int | float | void  
+Decl -> Type id ;| Type id = Expr ; | Type id Dimensions ; | Type id ( ArgList ) Block
+Dimensions -> [ num ] | Dimensions [ num ]
+ArgList -> epsilon | Arg , ArgList | Arg
+TypeList -> epsilon | Type , TypeList | Type
+Arg -> Type id | Type id [ ] Dimensions | Type id ( TypeList )      //支持 int a [][3][4]等数组指针定义
+Stmt -> id = Expr ; | Expr = Expr ; | if ( Bool ) Stmt | if ( Bool ) Stmt else Stmt | while ( Bool ) Stmt | return Expr ; | Block | id ( ParamList ) ; | return ; | print Expr ;
+Expr -> num | flo | & id | id | Expr [ Expr ] | * Expr | Expr + Expr | Expr * Expr | ( Expr ) | id ( ParamList )  
+Bool -> Expr rop Expr | Expr | Bool and Bool | Bool or Bool | ( Bool )
+ParamList -> epsilon | Param , ParamList | Param
+Param -> Expr                                        // 仅 id 就原生支持所有类型 | id [ ] | id ( ) //传入数组指针，函数指针
+//主要修改
+//不允许顶层出现stmt，不是python
+//支持basetype指针
+//统一DeclList和StmtList，支持Block级实现
+//简化设计，保留ParamList和ArgList的尾符号
+//Expr [ Expr ] == *(Expr + Expr)
+//有可能支持 Bool and Bool | Bool or Bool | for ( Stmt Bool ; Stmt ) Stmt

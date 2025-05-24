@@ -41,6 +41,7 @@ const std::vector<token> skey =
     {"ROP","<"},
     {"ROP","<="},
     {"ROP",">"},
+    {"ROP","=="},
     {"ASG","="},
     {"SKIP"," "},
     {"SKIP","\n"},

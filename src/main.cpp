@@ -19,7 +19,7 @@ namespace fs = std::filesystem;
 int main()
 {
     //LCMPFileIO::test_main_strProd(fs::path(u8"c:/code/CPP/Compiler-Lab/grammar/SLR1ConflictReslove.txt"));
-    AST::test_typeSystem_main();
+    //AST::test_typeSystem_main();
     //AST::AST_test_main();
     //Semantic::test_Semantic_main();
     IR::test_IR_main();

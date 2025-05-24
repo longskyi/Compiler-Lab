@@ -28,6 +28,8 @@ set(SOURCE
     ${CMAKE_CURRENT_LIST_DIR}/src/fileIO.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/parserGen.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/Semantic.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/irGen.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/irOptimize.cpp
     ${ASTSOURCE}
     )
 

@@ -120,7 +120,7 @@ public:
     std::vector<unique_ptr<Arg>> argLists;
     static constexpr std::array<std::u8string_view,3> SupportProd=
     //ArgList -> epsilon | Arg ; ArgList | Arg
-    {u8"ArgList -> epsilon",u8"ArgList -> Arg ; ArgList",u8"ArgList -> Arg"};
+    {u8"ArgList -> epsilon",u8"ArgList -> Arg , ArgList",u8"ArgList -> Arg"};
     inline ArgList() {
         this->Ntype = ASTType::ArgList;
         this->subType = ASTSubType::ArgList;

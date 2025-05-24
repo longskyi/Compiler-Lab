@@ -6,7 +6,7 @@ Type -> BaseType | Type *
 BaseType -> int | float | void  
 Decl -> Type id ;| Type id = Expr ; | Type id Dimensions ; | Type id ( ArgList ) Block
 Dimensions -> [ num ] | Dimensions [ num ]
-ArgList -> epsilon | Arg ; ArgList | Arg
+ArgList -> epsilon | Arg , ArgList | Arg
 TypeList -> epsilon | Type , TypeList | Type
 Arg -> Type id | Type id [ ] Dimensions | Type id ( TypeList )      //支持 int a [][3][4]等数组指针定义
 Stmt -> id = Expr ; | Expr = Expr ; | if ( Bool ) Stmt | if ( Bool ) Stmt else Stmt | while ( Bool ) Stmt | return Expr ; | Block | id ( ParamList ) ; | return ; | print Expr ;
