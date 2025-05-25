@@ -70,6 +70,10 @@ public:
     inline bool empty() const {
         return datatype == noneinit || unique_id == 0;
     }
+    inline void clear() {
+        unique_id = OperandId(0);
+        datatype = noneinit;
+    }
     enum OperandType {
         noneinit,
         i32,
@@ -408,130 +412,7 @@ inline u8string BinaryOpInstOPtypeToString(BinaryOpInst::OPtype type) {
     }
 }
 
-inline u8string IRformat(const IRinst inst) {
-    return std::visit(overload {
-        // 1. 二元运算指令 (add/mul/cmp/cast)
-        [](const BinaryOpInst& op) -> u8string {
-            u8string ret;
-            ret += op.dst.format() + u8" = ";
-            switch (op.op) {
-            case BinaryOpInst::MainOP::add:
-                ret += u8"add." + BinaryOpInstOPtypeToString(op.op_type) + u8" ";
-                break;
-            case BinaryOpInst::MainOP::mul:
-                ret += u8"mul." + BinaryOpInstOPtypeToString(op.op_type) + u8" ";
-                break;
-            case BinaryOpInst::MainOP::cmp: {
-                u8string cmp_op;
-                switch (op.cmp_type) {
-                case BinaryOpInst::cmpType::EQ: cmp_op = u8"eq "; break;
-                case BinaryOpInst::cmpType::NE: cmp_op = u8"ne "; break;
-                case BinaryOpInst::cmpType::GE: cmp_op = u8"ge "; break;
-                case BinaryOpInst::cmpType::G:  cmp_op = u8"gt "; break;
-                case BinaryOpInst::cmpType::LE: cmp_op = u8"le "; break;
-                case BinaryOpInst::cmpType::L:  cmp_op = u8"lt "; break;
-                default: cmp_op += u8""; break;
-                }
-                ret += u8"cmp." + cmp_op;
-                break;
-            }
-            case BinaryOpInst::MainOP::cast: {
-                u8string cast_op;
-                switch (op.op_type) {
-                case BinaryOpInst::OPtype::i32Toptr: cast_op = u8"i32_to_ptr "; break;
-                case BinaryOpInst::OPtype::ptrToi32: cast_op = u8"ptr_to_i32 "; break;
-                case BinaryOpInst::OPtype::f32Toi32: cast_op = u8"f32_to_i32 "; break;
-                case BinaryOpInst::OPtype::i32Tof32: cast_op = u8"i32_to_f32 "; break;
-                default: cast_op = u8""; break;
-                }
-                ret += u8"cast." + cast_op;
-                break;
-            }
-            case BinaryOpInst::MainOP::COPY:
-                ret += u8"copy ";
-                break;
-            default:
-                return u8"";
-            }
-            ret += u8" " + op.src1.format();
-            if (op.op != BinaryOpInst::MainOP::cast) {
-                ret += u8", " + op.src2.format();
-            }
-            return ret;
-        },
-        // 2. 函数调用指令
-        [](const callOpInst& call) -> u8string {
-            u8string ret = u8"call ";
-            if (!call.ret.empty()) {
-                ret += call.ret.format() + u8" = ";
-            }
-            ret += call.targetFUNC.format() + u8"(";
-            for (size_t i = 0; i < call.srcs.size(); ++i) {
-                if (i > 0) ret += u8", ";
-                ret += call.srcs[i].format();
-            }
-            ret += u8")";
-            return ret;
-        },
-
-        // 3. 内存分配指令
-        [](const allocaOpInst& alloc) -> u8string {
-            return alloc.ret.format() + u8" = alloca " + 
-                toU8str(std::to_string(alloc.size)) + u8", align " + 
-                toU8str(std::to_string(alloc.align));
-        },
-
-        // 4. 内存读写指令
-        [](const memOpInst& mem) -> u8string {
-            if (mem.memOP == memOpInst::OP::load) {
-                return mem.dst.format() + u8" = load " + IRformat(mem.datatype) + u8" " + mem.src.format() + 
-                       u8", align " + toU8str(std::to_string(mem.align));
-            } else if (mem.memOP == memOpInst::OP::store) {
-                return u8"store " + IRformat(mem.datatype) + u8" " + mem.src.format() + u8", " + 
-                       mem.dst.format() + u8", align " + toU8str(std::to_string(mem.align));
-            }
-            return u8"";
-        },
-
-        // 5. 返回指令
-        [](const retInst& ret) -> u8string {
-            if (ret.src.empty()) {
-                return u8"ret void";
-            }
-            return u8"ret " + ret.src.format();
-        },
-        // 6. 分支指令
-        [](const BrInst& br) -> u8string {
-            if (!br.is_conditional) {
-                return u8"br " + br.trueLabel.format();
-            }
-            return u8"br " + br.condition.format() + u8", " + 
-                   br.trueLabel.format() + u8", " + br.falseLabel.format();
-        },
-
-        // 7. Phi节点指令
-        [](const phiInst& phi) -> u8string {
-            u8string ret = phi.dst.format() + u8" = phi ";
-            for (size_t i = 0; i < phi.srcs.size(); ++i) {
-                if (i > 0) ret += u8", ";
-                ret += u8"[" + phi.srcs[i].second.format() + u8", " + 
-                       phi.srcs[i].first.format() + u8"]";
-            }
-            return ret;
-        },
-
-        // 8. 标签指令
-        [](const labelInst& label) -> u8string {
-            return label.label.format() + u8":";
-        },
-        // new 9. print指令
-        [](const printInst& ret) -> u8string {
-            return u8"print " + ret.src.format();
-        },
-        // 默认情况
-        [](auto&&) -> u8string { return u8""; }
-    }, inst);
-}
+u8string IRformat(const IRinst inst);
 
 struct GlobalVarIR {
     u8string name;
@@ -657,10 +538,9 @@ public:
             out<<"}\n";
 
             if (func.IRoptimized) {
-                out << "\n";  // 添加空行分隔
+                out << "\n";
                 func.IRoptimized->printCFG(out);
             } else {
-                // 打印原始指令
                 for (const auto& inst : func.Instblock) {
                     if (auto inst_ptr = std::get_if<labelInst>(&inst)) {
                         ptab(0);
@@ -723,144 +603,23 @@ public:
 
 
 //获取idNode对应的Operand
-inline Operand fetchIdAddr(AST::SymIdNode * id_ptr , IRGenVisitor * IRGenerator) {
-    auto SePtr = static_cast<Semantic::SymbolEntry *>(id_ptr->symEntryPtr);
-    auto ret = IRGenerator->EntrySymMap->at(SePtr);
-    return ret;
-}
+Operand fetchIdAddr(AST::SymIdNode * id_ptr , IRGenVisitor * IRGenerator);
+
 //idNode对应的数据类型
-inline Datatype fetchIdType(AST::SymIdNode * id_ptr , IRGenVisitor * IRGenerator) {
-    auto SePtr = static_cast<Semantic::SymbolEntry *>(id_ptr->symEntryPtr);
-    return TypingSystem2IRType(SePtr->Type);
-}
+Datatype fetchIdType(AST::SymIdNode * id_ptr , IRGenVisitor * IRGenerator);
+
 //生成cast指令，添加在insts之后，返回cast后的Operand，src不应该是立即数
-inline Operand genCastInst(std::deque<IRinst> & insts ,AST::CAST_OP cast_op , Operand src) {
-    BinaryOpInst cast_inst;
-    cast_inst.op = BinaryOpInst::cast;
-    switch(cast_op) {
-    case AST::CAST_OP::INT_TO_FLOAT:
-    {
-        cast_inst.op_type = BinaryOpInst::i32Tof32;
-        cast_inst.src1 = src;
-        auto dst = Operand::allocOperand(Operand::OperandType::f32);
-        cast_inst.dst = dst;
-        cast_inst.validate();
-        insts.push_back(cast_inst);
-        return dst;
-    }
-    case AST::CAST_OP::INT_TO_PTR:
-    {
-        cast_inst.op_type = BinaryOpInst::i32Toptr;
-        cast_inst.src1 = src;
-        auto dst = Operand::allocOperand(Operand::OperandType::ptr);
-        cast_inst.dst = dst;
-        cast_inst.validate();
-        insts.push_back(cast_inst);
-        return dst;
-    }
-    case AST::CAST_OP::PTR_TO_INT:
-    {
-        cast_inst.op_type = BinaryOpInst::ptrToi32;
-        cast_inst.src1 = src;
-        auto dst = Operand::allocOperand(Operand::OperandType::i32);
-        cast_inst.dst = dst;
-        cast_inst.validate();
-        insts.push_back(cast_inst);
-        return dst;
-    }
-    case AST::CAST_OP::FLOAT_TO_INT:
-    {
-        cast_inst.op_type = BinaryOpInst::f32Toi32;
-        cast_inst.src1 = src;
-        auto dst = Operand::allocOperand(Operand::OperandType::i32);
-        cast_inst.dst = dst;
-        cast_inst.validate();
-        insts.push_back(cast_inst);
-        return dst;
-    }
-    case AST::CAST_OP::FUNC_TO_PTR:
-    case AST::CAST_OP::ARRAY_TO_PTR:
-    case AST::CAST_OP::PTR_TO_PTR:
-    case AST::CAST_OP::NO_OP:
-        return src;
-    default:
-        std::cerr<<"未实现的类型转换\n";
-        return src;
-    }
-}
+Operand genCastInst(std::deque<IRinst> & insts ,AST::CAST_OP cast_op , Operand src);
+
 //生成load指令
-inline void genLoadInst(std::deque<IRinst> & insts ,Operand srcAddr,Operand dst) {
-    memOpInst load_inst;
-    load_inst.memOP = memOpInst::load;
-    load_inst.src = srcAddr;
-    load_inst.dst = dst;
-    switch(dst.datatype)
-    {
-    case Operand::OperandType::f32 :
-        load_inst.datatype = f32;
-        load_inst.align = 4;
-        break;
-    case Operand::OperandType::i32 :
-        load_inst.datatype = i32;
-        load_inst.align = 4;
-        break;
-    case Operand::OperandType::ptr :
-        load_inst.datatype = ptr;
-        load_inst.align = PTR_LENGTH_IN_BYTES;
-        break;
-    case Operand::OperandType::LABEL :
-    case Operand::OperandType::noneinit :
-    default:
-        std::cerr<<"错误的load指令dst类型\n";
-        return;
-    }
-    insts.push_back(load_inst);
-}
+void genLoadInst(std::deque<IRinst> & insts ,Operand srcAddr,Operand dst);
 
 //生成store指令
-inline void genStoreInst(std::deque<IRinst> & insts ,Operand src,Operand dstAddr) {
-    memOpInst store_inst;
-    store_inst.memOP = memOpInst::store;
-    store_inst.src = src;
-    store_inst.dst = dstAddr;
-    switch(src.datatype)
-    {
-    case Operand::OperandType::f32 :
-        store_inst.datatype = f32;
-        store_inst.align = 4;
-        break;
-    case Operand::OperandType::i32 :
-        store_inst.datatype = i32;
-        store_inst.align = 4;
-        break;
-    case Operand::OperandType::ptr :
-        store_inst.datatype = ptr;
-        store_inst.align = PTR_LENGTH_IN_BYTES;
-        break;
-    case Operand::OperandType::LABEL :
-    case Operand::OperandType::noneinit :
-    default:
-        std::cerr<<"错误的load指令dst类型\n";
-        return;
-    }
-    insts.push_back(store_inst);
-}
+void genStoreInst(std::deque<IRinst> & insts ,Operand src,Operand dstAddr);
 
 //生成call指令，返回dst地址（对于void，dst为空Operand）
-inline Operand genCallInst(std::deque<IRinst> & insts ,AST::SymIdNode * func_id,IRGenVisitor * irgen,std::vector<Operand> srcAddrVec) {
-    callOpInst call_inst;
-    auto func = fetchIdAddr(func_id,irgen);
-    auto typing = static_cast<Semantic::SymbolEntry *>(func_id->symEntryPtr)->Type;
-    call_inst.srcs = srcAddrVec;
-    call_inst.targetFUNC = func; 
-    Operand dst;
-    if(typing.eType->basicType != AST::baseType::VOID) {
-        dst = Operand::allocOperand(fetchIdType(func_id,irgen),u8"ret");
-    }
-    call_inst.ret = dst;
-    insts.push_back(call_inst);
-    return dst;
-}
+Operand genCallInst(std::deque<IRinst> & insts ,AST::SymIdNode * func_id,IRGenVisitor * irgen,std::vector<Operand> srcAddrVec);
+
 inline Operand::OperandType TypingSystem2OperandType(AST::SymType & Type) {
     return IRtype2OperandType(TypingSystem2IRType(Type));
 }
@@ -1072,16 +831,24 @@ void renameOperand(IRinst& inst, const Operand& from, const Operand& to);
 
 void renameOperandsInBlock(std::vector<IRinst>& block, const Operand& from, const Operand& to);
 
+//常量传播待完成
 
+//mem2Reg待完成
 
 
 
 inline void test_IR_main() {
+    auto start = std::chrono::high_resolution_clock::now();
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    
+
     auto astbase = parserGen(
         u8"C:/code/CPP/Compiler-Lab/grammar/grammar.txt",
         u8"C:/code/CPP/Compiler-Lab/grammar/terminal.txt",
         u8"C:/code/CPP/Compiler-Lab/grammar/SLR1ConflictReslove.txt"
     );
+
     std::ofstream o("output.json");
     nlohmann::json j = astbase;
     o << std::setw(4) << j;  // std::setw(4) 控制缩进
@@ -1202,6 +969,11 @@ inline void test_IR_main() {
     v6.build(&tmp,&astT,&irbase,&ExprMap,&entry_map);
     irbase.print();
     std::cout<<"stop\n";
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    std::cout << "Function took " 
+              << duration.count() << " microseconds (" 
+              << duration.count() / 1000.0 << " milliseconds) to execute.\n";
     return;
     
 }
