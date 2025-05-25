@@ -9,6 +9,7 @@
 #include"lcmpfileio.h"
 //#include"DFA.h"
 //#include"lexer.h"
+#include "asmGen.h"
 #include "irGen.h"
 #include "Semantic.h"
 #include"parserGen.h"
@@ -22,7 +23,8 @@ int main()
     //AST::test_typeSystem_main();
     //AST::AST_test_main();
     //Semantic::test_Semantic_main();
-    IR::test_IR_main();
+    //IR::test_IR_main();
+    ASM::test_ASM_main();
     return 0;
     //NFA_NS::test_regex_to_dfa();
     //Lexer::test_main_u8();

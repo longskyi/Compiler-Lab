@@ -342,18 +342,20 @@ bool parseStmtIRGen(AST::Stmt * Stmt_ptr,IRGenVisitor * IRGenerator) {
     if(Stmt_ptr->subType == AST::ASTSubType::Return) {
         auto return_ptr = static_cast<AST::Return *>(Stmt_ptr);
         std::deque<IRinst> curr_code;
-        if(!return_ptr->expr_ptr.has_value()) {
+        if((!return_ptr->expr_ptr.has_value() )|| return_ptr->expr_ptr == nullptr) {
             retInst ret;
             Context[Stmt_ptr].code.push_back(ret);
+            
+        } else {
+            auto expr_ptr = return_ptr->expr_ptr.value().get();
+            auto & ctx = Context[expr_ptr];
+            retInst ret;
+            ret.src = ctx.expr_addr;
+            curr_code.insert(curr_code.end(),ctx.code.begin(),ctx.code.end());
+            curr_code.push_back(ret);
+            Context[Stmt_ptr].code = std::move(curr_code);
+            Context.erase(expr_ptr);
         }
-        auto expr_ptr = return_ptr->expr_ptr.value().get();
-        auto & ctx = Context[expr_ptr];
-        retInst ret;
-        ret.src = ctx.expr_addr;
-        curr_code.insert(curr_code.end(),ctx.code.begin(),ctx.code.end());
-        curr_code.push_back(ret);
-        Context[Stmt_ptr].code = std::move(curr_code);
-        Context.erase(expr_ptr);
     }
     if(Stmt_ptr->subType == AST::ASTSubType::StmtPrint) {
         auto print_ptr = static_cast<AST::StmtPrint *>(Stmt_ptr);

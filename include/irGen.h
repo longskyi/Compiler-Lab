@@ -936,6 +936,12 @@ inline void test_IR_main() {
         while ( a < c) {
             a = a + 1;
         }
+        if (a<c) {
+            a = a + 1 ;
+        }
+        else {
+            c = c + 1;
+        }
         return factorial(5,5);
     }
 

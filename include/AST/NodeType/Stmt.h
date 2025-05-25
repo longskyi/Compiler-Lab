@@ -291,7 +291,7 @@ public:
         case 1:
         {
             //return ;
-            assert(NonTnode->childs.size() == 3);
+            assert(NonTnode->childs.size() == 2);
             auto newNode = std::make_unique<Return>();
             newNode->expr_ptr = std::nullopt;
             

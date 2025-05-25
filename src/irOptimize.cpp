@@ -112,7 +112,8 @@ bool splitIRblock(FunctionIR & funcIR) {
             has_clean = true;
             continue;
         }
-    }   
+    } 
+    funcIR.IRoptimized->enterBlock = funcIR.IRoptimized->BlockLists.front().get();
     if(has_clean) {
         std::cerr<<"已清理不可达指令\n";
     }

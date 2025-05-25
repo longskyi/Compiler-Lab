@@ -24,6 +24,22 @@ enum X64Register {
     NONE,
 };
 
+//可能加上RBP
+const std::unordered_set<X64Register> GPRs64 = {
+    RAX, RBX, RCX, RDX, RSI, RDI, RBP, RSP,
+    R8, R9, R10, R11, R12, R13, R14, R15
+};
+
+const std::unordered_set<X64Register> GPRs32 = {
+    EAX, EBX, ECX, EDX, ESI, EDI, EBP, ESP,
+    R8D, R9D, R10D, R11D, R12D, R13D, R14D, R15D
+};
+
+const std::unordered_set<X64Register> FPRsXMM = {
+    XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7,
+    XMM8, XMM9, XMM10, XMM11, XMM12, XMM13, XMM14, XMM15
+};
+
 inline string Eformat(X64Register reg) {
     switch (reg) {
         // 64-bit registers
@@ -131,7 +147,7 @@ public:
     bool is_dirty = false; //callee save
     int StackOffset;    //存储在栈上的位置（rbp-StackOffset）
     //callee save end
-    inline bool is_Reg_valid(size_t InstIdx) {
+    inline bool is_Reg_valid(size_t InstIdx)const {
         if(is_dirty) return false;
         if(occupyOperand.empty()) return true;
         if(!occupyOperandContext) {
@@ -144,7 +160,7 @@ public:
             return false;
         }
     }
-    inline bool is_Reg_dirty() {
+    inline bool is_Reg_dirty() const {
         return  is_dirty;
     }
     inline void calleeSave(int stackOffset_) {
@@ -156,36 +172,37 @@ public:
         StackOffset = stackOffset_;
     }
     //为线性分配寄存器，方便排序使用
-    inline size_t next_use_idx(size_t InstIdx) {
+    inline size_t next_use_idx(size_t InstIdx) const {
         if(is_Reg_valid(InstIdx)) return 0;
         if(!occupyOperandContext) {
             std::cerr<<"寄存器分配错误，不可用的operand context\n";
         }
-        //应该不可能这么多inst
-        if(occupyOperandContext->will_escape) return std::numeric_limits<int>::max()/2;
         auto & useVec = occupyOperandContext->usedIdx;
         auto it = std::upper_bound(useVec.begin(),useVec.end(),InstIdx);
         if(it == useVec.end()) {
+            //应该不可能这么多inst
+            if(occupyOperandContext->will_escape) return std::numeric_limits<int>::max()/2;
             return useVec.back();
         } 
         return *it;
     }
-    inline bool is_reg_name(X64Register name) {
+    inline bool is_reg_name(X64Register name) const {
         if(name == this->Name) return true;
         for(auto q : aliasName) {
             if(q == name) return true;
         }
         return false;
     }
-    inline void occupy(X64Register usedName, IR::Operand & operand) {
+    inline void occupy(X64Register usedName, IR::Operand & operand , OperandContext * OpContext) {
         this->occupyOperand = operand;
+        this->occupyOperandContext = OpContext;
         this->OccupyName = usedName;
     }
     inline void clear() {
         this->occupyOperand.clear();
         this->occupyOperandContext = nullptr;
     }
-    inline bool isXMM() {
+    inline bool isXMM() const {
         return XMMREG.count(this->Name);
     }
 };
@@ -266,9 +283,10 @@ inline std::vector<std::variant<X64Register,int64_t>> arrangeArgPlace(IR::Functi
                 break;
                 std::cerr<<"错误 栈参数传值 not implement\n";
             }
+            intRegUsed++;
         }
         if(args[i].datatype == IR::Operand::f32) {
-            switch (intRegUsed) {
+            switch (xmmRegUsed) {
             case 0:
                 ret.push_back(XMM0);
                 break;
@@ -289,6 +307,7 @@ inline std::vector<std::variant<X64Register,int64_t>> arrangeArgPlace(IR::Functi
                 break;
                 std::cerr<<"错误 栈参数传值 not implement\n";
             }
+            xmmRegUsed++;
         }
         if(args[i].datatype == IR::Operand::ptr) {
             switch (intRegUsed) {
@@ -315,6 +334,7 @@ inline std::vector<std::variant<X64Register,int64_t>> arrangeArgPlace(IR::Functi
                 break;
                 std::cerr<<"错误 栈参数传值 not implement\n";
             }
+            intRegUsed++;
         } else {
             std::cerr<<"不支持的数据类型传参\n";
         }
@@ -324,40 +344,155 @@ inline std::vector<std::variant<X64Register,int64_t>> arrangeArgPlace(IR::Functi
 
 
 class BaseBlockContext { //Block上下文
-private:
-    inline static size_t next_id = 0; //唯一id方便使用
 public:
+    inline static size_t next_id = 0; //唯一id方便使用
     std::vector<X64RegStatus> RegFile;  //排序有讲究，尽量把通用寄存器放前头
     std::unordered_map<IR::Operand,std::unique_ptr<OperandContext>> IRlocMap;
     int64_t rspOffset = 0; //当前rsp相比ret（rbp默认位置）的offset 一般总是为负 //注意控制块中间的栈帧同步与spill问题
     std::vector<string> dataSection;    //不含section头，只包含定义
     std::vector<string> ASMcode;    //已经是最终输出，不进行格式化
-    //target是目标寄存器，contrains是要求不更改这些寄存器，返回实际分配到的寄存器
-    void spill(X64RegStatus& src,size_t InstIdx) {
-        // 确保栈对齐
-        if (src.Basewidth == 128) {  // XMM寄存器需要16字节对齐
-            // 检查当前栈是否16字节对齐（rspOffset是否为-16的倍数）
-            if (rspOffset % 16 != 0) {
-                int64_t adjust = (-rspOffset % 16);  // 需要调整的量
-                rspOffset -= adjust;
-                ASMcode.push_back("sub rsp, " + std::to_string(adjust));
+    inline BaseBlockContext() {
+        RegFile = genX64Reg();
+    }
+    inline BaseBlockContext(const BaseBlockContext& other) 
+        : rspOffset(other.rspOffset),
+        dataSection(other.dataSection),  
+        ASMcode(other.ASMcode) {         
+        RegFile.reserve(other.RegFile.size());
+        for (const auto& regStatus : other.RegFile) {
+            RegFile.push_back(regStatus);  // 假设X64RegStatus是可平凡拷贝的
+        }
+        for (const auto& [operand, opCtx] : other.IRlocMap) {
+            IRlocMap.emplace(
+                operand,
+                opCtx ? std::make_unique<OperandContext>(*opCtx) : nullptr 
+            );
+        }
+    }
+    void emit(const std::string & str) {
+        ASMcode.emplace_back(str);
+    }
+    //按照控制流程图生成的时候，后继block从前继block继承时，需要保存的信息
+    //rsp栈信息
+    //regFile的信息，清理所有occupyOperand记录即可
+    //IRlocMap中的alloca信息
+    //其他需要删除
+    void inherit_from(const BaseBlockContext & other) {
+        this->rspOffset = other.rspOffset;
+        this->RegFile = other.RegFile;
+        for(auto & regf : RegFile) {
+            regf.clear();
+        }
+        for(auto & locItem : IRlocMap) {
+            auto  OperandCtx_ptr =  locItem.second.get();
+            if(OperandCtx_ptr->isStackPtr) {    //alloca
+                this->IRlocMap[locItem.first] = std::make_unique<OperandContext>(*OperandCtx_ptr);
             }
         }
-        // 分配栈空间并生成mov指令
-        rspOffset -= src.Basewidth / 8;  // width是位数，转为字节    
-        if (src.isXMM()) {
-            // XMM寄存器使用movaps/movups
-            bool isAligned = (rspOffset % 16) == 0;
-            std::string movInstr = isAligned ? "movaps" : "movups";
-            ASMcode.push_back(movInstr + " [rsp" + 
-                            (rspOffset < 0 ? std::to_string(rspOffset) : "+"+std::to_string(rspOffset)) + 
-                            "], " + Eformat(src.Name));
-        } else {
-            // 通用寄存器使用mov
-            ASMcode.push_back("mov [rsp" + 
-                            (rspOffset < 0 ? std::to_string(rspOffset) : "+"+std::to_string(rspOffset)) + 
-                            "], " + Eformat(src.Name));
+    }
+    //为了进行同步，需要进行以下操作
+    //修改rsp栈帧
+    //同步所有dirty（如果源是dirty，后继不是dirty，则需要处理（且与源分配相同））
+    //phi内容，暂不支持
+    std::vector<std::string> sync_to(const BaseBlockContext & other) {
+        std::vector<std::string> retASM;
+        const std::unordered_set<X64Register> calleeSaveRegs = {RBX, R12, R13, R14, R15, RBP};
+
+        // 1. 同步栈帧 - 调整rsp到相同位置
+        if (this->rspOffset != other.rspOffset) {
+            int64_t offsetDiff = other.rspOffset - this->rspOffset;
+            if (offsetDiff > 0) {
+                retASM.push_back("sub rsp, " + std::to_string(offsetDiff));
+            } else {
+                retASM.push_back("add rsp, " + std::to_string(-offsetDiff));
+            }
         }
+
+        // 2. 同步callee-save寄存器
+        for (size_t i = 0; i < this->RegFile.size(); ++i) {
+            const auto& thisReg = this->RegFile[i];
+            const auto& otherReg = other.RegFile[i];
+
+            // 只处理callee-save寄存器
+            if (!calleeSaveRegs.count(thisReg.Name)) continue;
+
+            // 情况1: 当前是dirty而目标不是dirty - 需要存储到栈
+            if (thisReg.is_dirty && !otherReg.is_dirty) {
+                int64_t offRbp = otherReg.StackOffset; // 使用目标的栈位置
+                int64_t off = offRbp - other.rspOffset; // 注意此时，本地的栈已经提前修改了
+                
+                std::string movInstr = thisReg.isXMM() ? 
+                    ((off % 16 == 0) ? "movaps" : "movups") : "mov";
+                
+                retASM.push_back(movInstr + " [rsp" + 
+                            (off >= 0 ? "+" : "") + std::to_string(off) + 
+                            "], " + Eformat(thisReg.Name));
+            }
+            // 情况2: 当前不是dirty而目标是dirty - 需要从栈恢复
+            else if (!thisReg.is_dirty && otherReg.is_dirty) {
+                int64_t offRbp = otherReg.StackOffset;
+                int64_t off = offRbp - other.rspOffset;
+                
+                std::string movInstr = thisReg.isXMM() ? 
+                    ((off % 16 == 0) ? "movaps" : "movups") : "mov";
+                
+                retASM.push_back(movInstr + " " + Eformat(thisReg.Name) + 
+                            ", [rsp" + (off >= 0 ? "+" : "") + 
+                            std::to_string(off) + "]");
+            }
+        }
+
+        return retASM;
+    }
+    //输入对于理论rbp的offset，输出此时相对rsp的offset
+    // target = rbp + rbp_off
+    // rsp = rbp + rspOffset
+    // target = rsp + x
+    //rbp + rspOffset + x = rbp + rbp_off
+    // x = rbp_off - rspOffset
+    inline int64_t culRspOff(int64_t rbp_off) {
+        return rbp_off - rspOffset;
+    }
+    //强制声明某个寄存器现在存储了某个operand
+    void DeclareOcuupy(X64Register dst,IR::Operand op) {
+        for(auto & regf:RegFile) {
+            if(regf.is_reg_name(dst)) {
+                regf.occupy(dst,op,IRlocMap[op].get());
+            }
+        }
+    }
+    void spill(X64Register src , size_t InstIdx) {
+        for(auto & regf : RegFile) {
+            if(regf.is_reg_name(src)) {
+                spill(regf,InstIdx);
+            }
+        }
+    }
+    void spill(X64RegStatus& src, size_t InstIdx) {
+        const size_t reg_size = src.Basewidth / 8;
+        // 对齐要求（仅XMM需要16字节对齐）
+        int64_t adjust = 0;
+        if (src.isXMM()) {
+            int64_t new_rsp = rspOffset - reg_size;
+            int64_t misalignment = (-new_rsp) % 16;
+            if (misalignment != 0) {
+                adjust = 16 - misalignment;
+            }
+        }
+
+        if (adjust > 0 || reg_size > 0) {
+            int64_t total_sub = adjust + reg_size;
+            ASMcode.push_back("sub rsp, " + std::to_string(total_sub));
+            rspOffset -= total_sub;
+        }
+        // 3. 生成spill指令（总是使用[rsp+0]，因为总是在栈顶）
+        if (src.isXMM()) {
+            // 由于已经处理对齐，这里可以直接用movaps
+            ASMcode.push_back("movaps [rsp], " + Eformat(src.Name)); 
+        } else {
+            ASMcode.push_back("mov [rsp], " + Eformat(src.Name));
+        }
+        
         if(src.is_Reg_dirty()) {
             src.is_dirty = false;
             src.StackOffset = rspOffset;
@@ -367,24 +502,40 @@ public:
             src.clear();
         }
     }
+    //target是目标寄存器，contrains是要求不更改这些寄存器，返回实际分配到的寄存器
     X64Register allocReg(const std::unordered_set<X64Register> & target,const std::unordered_set<X64Register> & contrains , size_t InstIdx) {
         //分为三道pass，第一道pass查看有没有空的，有的话则返回
         //第二道pass，如果第一道pass失败，则尝试使用dirty的reg
         //第三道pass，如果还是失败，则使用最后一次使用最晚的，spill出去并返回
+
+        auto matchRequire = [](const std::unordered_set<X64Register> & target,const std::unordered_set<X64Register> & contrains,X64RegStatus & regStatus) {
+            for(const auto & tg : target) {
+                if(regStatus.is_reg_name(tg)) {
+                    bool allowed = true;
+                    for(const auto & constrain : contrains) {
+                        if(regStatus.is_reg_name(constrain)) {
+                            allowed = false;
+                            break;
+                        }
+                    }
+                    if(allowed) return tg;
+                    else return NONE;
+                }
+            }
+            return NONE;
+        };
         for (auto& regStatus : RegFile) {
-            if (target.count(regStatus.Name) && 
-                    !contrains.count(regStatus.Name) && 
-                    regStatus.is_Reg_valid(InstIdx)) {
-                    return regStatus.Name;
+            auto ret = matchRequire(target, contrains, regStatus);
+            if(ret != NONE) {
+                if(regStatus.is_Reg_valid(InstIdx)) return ret;
             }
         }
         for (auto& regStatus : RegFile) {
-            if (target.count(regStatus.Name) && 
-                !contrains.count(regStatus.Name) && 
-                regStatus.is_Reg_dirty()) {
+            auto ret = matchRequire(target, contrains, regStatus);
+            if (ret!=NONE && regStatus.is_Reg_dirty()) {
                 //脏寄存器需要spill出去
                 spill(regStatus, InstIdx);
-                return regStatus.Name;
+                return ret;
             }
         }
 
@@ -392,7 +543,8 @@ public:
         size_t farthestUse = 0;
         
         for (auto& regStatus : RegFile) {
-            if (target.count(regStatus.Name) && !contrains.count(regStatus.Name)) {
+            auto ret = matchRequire(target, contrains, regStatus);
+            if (ret != NONE) {
                 size_t nextUse = regStatus.next_use_idx(InstIdx);
                 if (nextUse > farthestUse) {
                     farthestUse = nextUse;
@@ -402,7 +554,7 @@ public:
         }
         if (farthestReg) {
             spill(*farthestReg, InstIdx);
-            return farthestReg->Name;
+            return matchRequire(target, contrains, *farthestReg);
         }
         //失败
         std::cerr<<"寄存器分配失败\n";
@@ -417,7 +569,7 @@ public:
     X64Register MoveOperandToTargetReg(const std::unordered_set<X64Register> & target,IR::Operand & src,size_t InstIdx,const std::unordered_set<X64Register> & contrains ={}) {
         //首先检查目标操作数在不在target里，如果在，直接返回
         //如果不在，确定操作数类型，并给出操作
-        X64Register srcReg;
+        X64Register srcReg = NONE;
         for(auto & reg:RegFile){
             if(reg.occupyOperand == src) {
                 srcReg = reg.OccupyName;
@@ -513,12 +665,13 @@ public:
                 return NONE;
             }
         } else if(src.memplace == IR::Operand::GLOBAL) {
-            ASMcode.push_back("mov " + Eformat(targetReg) +", " + toString(src.LiteralName));
+            //从data section中取数据
+            ASMcode.push_back("mov " + Eformat(targetReg) +", [" + toString(src.LiteralName)+"]");
         }
         // 更新寄存器状态
         for (auto& reg : RegFile) {
             if (reg.is_reg_name(targetReg)) {
-                reg.occupy(targetReg, src);
+                reg.occupy(targetReg, src,IRlocMap[src].get());
                 reg.occupyOperandContext = &loc;
                 break;
             }
@@ -535,6 +688,8 @@ public:
             if(std::holds_alternative<IR::allocaOpInst>(inst)) {
                 auto aloc = std::get<IR::allocaOpInst>(inst);
                 if(aloc.offset>maxSize) maxSize = aloc.offset;
+                this->IRlocMap[aloc.ret]->isStackPtr = true;
+                this->IRlocMap[aloc.ret]->rbpOffset = - aloc.offset;    //负数
             }
         } 
         if(maxSize > 0 ) {
@@ -558,23 +713,54 @@ public:
                 auto regName = std::get<X64Register>(place);
                 for(auto & regf : RegFile) {
                     if(regf.is_reg_name(regName)) {
-                        regf.occupy(regName,funcIR.Args[i]);
+                        regf.occupy(regName,funcIR.Args[i],IRlocMap[funcIR.Args[i]].get());
                     }
                 }
             }
         }
+        return;
+    }
+    void restoreCalleeSave(const std::unordered_set<X64Register> regs) {
+        for(auto & regf: this->RegFile) {
+            for(auto & regName : regs) {
+                if(regf.is_reg_name(regName) && !regf.is_dirty) {
+                    int64_t offRbp = regf.StackOffset;   // rbp + offRbp
+                    int64_t off = offRbp-rspOffset;     // rsp = rbp - rspOffset
+                    ASMcode.push_back("mov " + Eformat(regName) + ", [rsp" + 
+                                (off >= 0 ? "+" : "") + std::to_string(off) + "]");
+                    regf.is_dirty = true;
+                    regf.clear();
+                }
+            }
+        }
+    }
+    void RETrestore() {
+        const std::unordered_set<X64Register> resotreReg = {RBX,R12,R13,R14,R15,RBP};
+        //恢复寄存器
+        restoreCalleeSave(resotreReg);
+        //恢复栈帧
+        ASMcode.push_back("add "+ Eformat(RSP)+", "+std::to_string(-this->rspOffset));
+    }
+    void InitOperandWithIRBaseBlock(IR::IRBaseBlock * baseBlock) {
         auto markDef = [&](IR::Operand & op,size_t idx){
+            if(this->IRlocMap.count(op)) {
+                std::cerr<<"不满足SSA\n";
+                return;
+            }
+            this->IRlocMap[op] = std::make_unique<OperandContext>();
             this->IRlocMap[op]->startIdx = idx;
         };
         auto markUse = [&](IR::Operand & op,size_t idx){
-            if(op.memplace == IR::Operand::GLOBAL) {
-                this->IRlocMap[op]->startIdx = 0;
+            if(!this->IRlocMap.count(op)) {
+                this->IRlocMap[op] = std::make_unique<OperandContext>();
+                this->IRlocMap[op]->startIdx = idx;
             }
             this->IRlocMap[op]->usedIdx.push_back(idx);
         };
         //给所有operand设置 起始和使用 
-        for(size_t instIdx = 0 ; instIdx < funcIR.Instblock.size() ; instIdx++) {
-            auto & inst = funcIR.Instblock[instIdx];
+        auto instBlock = baseBlock->Insts;
+        for(size_t instIdx = 0 ; instIdx < instBlock.size() ; instIdx++) {
+            auto & inst = instBlock[instIdx];
             std::visit(overload {
                 [&](IR::BinaryOpInst& op) {
                     markDef(op.dst, instIdx);
@@ -647,50 +833,136 @@ public:
                 }
             }, inst);
         }
-        return;
-    }
-    void restoreCalleeSave(const std::unordered_set<X64Register> regs) {
-        for(auto & regf: this->RegFile) {
-            for(auto & regName : regs) {
-                if(regf.is_reg_name(regName) && !regf.is_dirty) {
-                    int64_t offRbp = regf.StackOffset;   // rbp + offRbp
-                    int64_t off = offRbp-rspOffset;     // rsp = rbp - rspOffset
-                    ASMcode.push_back("mov " + Eformat(regName) + ", [rsp" + 
-                                (off >= 0 ? "+" : "") + std::to_string(off) + "]");
-                    regf.is_dirty = true;
-                    regf.clear();
-                }
-            }
-        }
-    }
-    void RETrestore() {
-        const std::unordered_set<X64Register> resotreReg = {RBX,R12,R13,R14,R15,RBP};
-        //恢复寄存器
-        restoreCalleeSave(resotreReg);
-        //恢复栈帧
-        ASMcode.push_back("add "+ Eformat(RSP)+", "+std::to_string(-this->rspOffset));
     }
 };
 
 
-//暂时不考虑 phi指令问题
-class FuncASMGenerator
-{
+class FuncASMGenerator {
+private:
+    struct BlockGenInfo {
+        BlockGenInfo * inherit_from = nullptr;
+        std::unique_ptr<BaseBlockContext> initialCtx = nullptr;  // 该块的初始上下文
+        std::unique_ptr<BaseBlockContext> exitCtx = nullptr;     // 该块执行结束后的上下文
+        std::vector<std::string> asmCode;              // 该块生成的汇编
+        bool generated = false;                        // 是否已生成
+    };
+    std::unordered_map<IR::IRBaseBlock *,BlockGenInfo> BlockInfoMap;
+    std::vector<std::string> globalDataSection;
+    std::vector<IR::IRBaseBlock *> GenSequence;
+
 public:
-    std::unordered_map<IR::IRBaseBlock *,std::unique_ptr<BaseBlockContext>> BlockCtxMap;
+    inline bool generateFunction(IR::FunctionIR& func) {
+        auto & BlockLists = func.IRoptimized->BlockLists;
+        auto start = func.IRoptimized->enterBlock;
+        std::unordered_set<IR::IRBaseBlock *>visited;
+        std::function<void(IR::IRBaseBlock *,IR::IRBaseBlock*)> DFSgenSequence = [&](IR::IRBaseBlock * curr,IR::IRBaseBlock * inherit_from){
+            if(!curr) return;
+            if(visited.count(curr)) {
+                return ;
+            }
+            visited.insert(curr);
+            GenSequence.push_back(curr);
+            if(inherit_from)
+                BlockInfoMap[curr].inherit_from = &BlockInfoMap[inherit_from];
+            for(auto & successor : curr->successor) {
+                DFSgenSequence(successor,curr);
+            }
+        };
+        //确定生成asm的顺序
+        DFSgenSequence(start,nullptr);
+        
+        BlockInfoMap[start].initialCtx = std::make_unique<BaseBlockContext>();
+        //调用约定初始化
+        BlockInfoMap[start].initialCtx->InitOperandWithIRBaseBlock(start);
+        BlockInfoMap[start].initialCtx->InitArgsWithFunctionIR(func);
+        for(auto irblock : GenSequence) {
+            if(BlockInfoMap[irblock].initialCtx == nullptr) {
+                BlockInfoMap[irblock].initialCtx = std::make_unique<BaseBlockContext>();
+                BlockInfoMap[irblock].initialCtx->inherit_from(*BlockInfoMap[irblock].inherit_from->exitCtx);
+            }
+            BlockInfoMap[irblock].exitCtx = std::make_unique<BaseBlockContext>(*BlockInfoMap[irblock].initialCtx);
+            if(irblock != start) {
+                BlockInfoMap[irblock].exitCtx->InitOperandWithIRBaseBlock(irblock);
+            }
+            BaseBlockASMGen(*BlockInfoMap[irblock].exitCtx,*irblock);
+            BlockInfoMap[irblock].generated = true;
+            //打印生成的asm
+            for(auto & s : BlockInfoMap[irblock].exitCtx->ASMcode) {
+                std::cout<<s<<std::endl;
+            }
+            std::cout<<"funcBaseBlock END\n";
+            //end
+        }
+        return true;
+    }
+    bool BaseBlockASMGen(BaseBlockContext & BlockCtx ,IR::IRBaseBlock & IRblock);
+        
 };
 
+inline std::unordered_set<X64Register> inferRegisterType(const IR::Operand & src) {
+    if(src.datatype== IR::Operand::LABEL) {
+        std::cerr<<"错误，尝试对label获取类型\n";
+        return {};
+    }
+    if(src.datatype == IR::Operand::i32) {
+        return GPRs32;
+    }
+    if(src.datatype == IR::Operand::ptr) {
+        return GPRs64;
+    }
+    if(src.datatype == IR::Operand::f32) {
+        return FPRsXMM;
+    }
+    std::cerr<<"错误，不支持的类型infer\n";
+    return {};
+}
 
 inline bool BinaryOpASMGen(IR::BinaryOpInst& op, size_t InstIdx ,FuncASMGenerator & ASMGen,BaseBlockContext & BlockCtx ,IR::IRBaseBlock & IRblock) {
+    auto checkLastUse = [&](IR::Operand & op){
+        return InstIdx >= BlockCtx.IRlocMap[op]->usedIdx.back();
+    };
     if(op.op == IR::BinaryOpInst::add) {
-        if(op.op_type == IR::BinaryOpInst::i32) {
-
+        if(op.op_type == IR::BinaryOpInst::i32 || op.op_type == IR::BinaryOpInst::ptr) {
+            // add rax , rbx 会覆盖rax
+            // add rax , num 支持数字
+            // 如果第一个寄存器是最后一次使用（说明可以覆盖）
+            auto src1Regs = inferRegisterType(op.src1);
+            auto reg1 = BlockCtx.MoveOperandToTargetReg(src1Regs,op.src1,InstIdx);
+            // src1已经移动进reg1
+            if(!checkLastUse(op.src1) && !BlockCtx.IRlocMap[op.src1]->isStackPtr) {
+                //非最后一次使用，spill，寄存器不会清空
+                //如果src本身是stack指针，也不spill了
+                BlockCtx.spill(reg1,InstIdx);
+            }
+            //非最后一次使用，spill 寄存器不会清空
+            if(op.src2.memplace == IR::Operand::IMM) {
+                //支持立即数  文法中，立即数不会出现64位，所以可以安全用add reg1 立即数
+                BlockCtx.ASMcode.push_back("add "+Eformat(reg1)+", "+std::to_string(op.src2.valueI));
+            }
+            else {
+                src1Regs.erase(reg1);
+                auto reg2 = BlockCtx.MoveOperandToTargetReg(src1Regs,op.src2,InstIdx,{reg1});
+                BlockCtx.ASMcode.push_back("add "+Eformat(reg1)+", "+ Eformat(reg2));
+            }
+            //声明reg1被目标寄存器占领
+            BlockCtx.DeclareOcuupy(reg1,op.dst);
         }
         if(op.op_type == IR::BinaryOpInst::f32) {
-            
-        }
-        if(op.op_type == IR::BinaryOpInst::ptr) {
-            
+            // addss xmm0 , xmm1 会覆盖xmm0 不支持数字
+            // 如果第一个寄存器是最后一次使用（说明可以覆盖）
+            auto src1Regs = inferRegisterType(op.src1);
+            auto reg1 = BlockCtx.MoveOperandToTargetReg(src1Regs,op.src1,InstIdx);
+            // src1已经移动进reg1
+            if(!checkLastUse(op.src1)) {
+                //非最后一次使用，spill，寄存器不会清空
+                //尽管spill不是最佳选择，但是还是选了
+                BlockCtx.spill(reg1,InstIdx);
+            }
+            src1Regs.erase(reg1);
+            auto reg2 = BlockCtx.MoveOperandToTargetReg(src1Regs,op.src2,InstIdx,{reg1});
+            BlockCtx.ASMcode.push_back("addss "+Eformat(reg1)+", "+ Eformat(reg2));
+            //声明reg1被目标寄存器占领
+            BlockCtx.DeclareOcuupy(reg1,op.dst);
         }
     } else if(op.op == IR::BinaryOpInst::mul) {
         if(op.op_type == IR::BinaryOpInst::i32) {
@@ -717,33 +989,29 @@ inline bool BinaryOpASMGen(IR::BinaryOpInst& op, size_t InstIdx ,FuncASMGenerato
         }
     } else if(op.op == IR::BinaryOpInst::cmp) {
         //下一条一定是br
-        if(op.cmp_type == IR::BinaryOpInst::EQ) {
-
+        auto src1Regs = inferRegisterType(op.src1);
+        auto reg1 = BlockCtx.MoveOperandToTargetReg(src1Regs,op.src1,InstIdx);
+        src1Regs.erase(reg1);
+        auto reg2 = BlockCtx.MoveOperandToTargetReg(src1Regs,op.src2,InstIdx,{reg1});
+        if(op.src1.datatype == IR::Operand::f32) {
+            //不考虑浮点触发异常情况
+            BlockCtx.emit(std::format("comiss {}, {}",Eformat(reg1),Eformat(reg2)));
+        } else {
+            BlockCtx.emit(std::format("cmp {}, {}",Eformat(reg1),Eformat(reg2)));
         }
-        if(op.cmp_type == IR::BinaryOpInst::G) {
-
-        }
-        if(op.cmp_type == IR::BinaryOpInst::GE) {
-
-        }
-        if(op.cmp_type == IR::BinaryOpInst::L) {
-
-        }
-        if(op.cmp_type == IR::BinaryOpInst::LE) {
-
-        }
+        
     } else if(op.op == IR::BinaryOpInst::COPY) {
-        if(op.op_type == IR::BinaryOpInst::i32Tof32) {
+        auto src1Regs = inferRegisterType(op.src1);
+        auto reg1 = BlockCtx.MoveOperandToTargetReg(src1Regs,op.src1,InstIdx);
+        src1Regs.erase(reg1);
 
-        }
-        if(op.op_type == IR::BinaryOpInst::f32Toi32) {
-            
-        }
-        if(op.op_type == IR::BinaryOpInst::i32Toptr) {
-            
-        }
-        if(op.op_type == IR::BinaryOpInst::ptrToi32) {
-            
+        auto reg2 = BlockCtx.allocReg(src1Regs,{reg1},InstIdx);
+        BlockCtx.DeclareOcuupy(reg2,op.dst);
+        if(op.src1.datatype == IR::Operand::f32) {
+            BlockCtx.emit(std::format("mov {}, {}",Eformat(reg2),Eformat(reg1)));
+        } else {
+            //假定reg2已经高位置0
+            BlockCtx.emit(std::format("movaps {}, {}",Eformat(reg2),Eformat(reg1)));
         }
     }
     else {
@@ -754,7 +1022,122 @@ inline bool BinaryOpASMGen(IR::BinaryOpInst& op, size_t InstIdx ,FuncASMGenerato
 }
 
 
-inline bool BaseBlockASMGen(FuncASMGenerator & ASMGen,BaseBlockContext & BlockCtx ,IR::IRBaseBlock & IRblock) {
+inline bool memOpASMGen(IR::memOpInst& op, size_t InstIdx ,FuncASMGenerator & ASMGen,BaseBlockContext & BlockCtx ,IR::IRBaseBlock & IRblock) {
+    if(op.memOP == IR::memOpInst::load) {
+        //mov dst , src
+        auto dstregS = inferRegisterType(op.dst);
+        auto reg2 = BlockCtx.allocReg(dstregS,{},InstIdx);
+        BlockCtx.DeclareOcuupy(reg2,op.dst);
+        std::string movType="mov ";
+        if(op.dst.datatype == IR::Operand::f32) {
+            movType = "movss ";
+        }
+        if(BlockCtx.IRlocMap[op.src]->isStackPtr) {
+            //不用分配reg1
+            int64_t off = BlockCtx.culRspOff(BlockCtx.IRlocMap[op.src]->rbpOffset);
+            BlockCtx.ASMcode.push_back(movType + Eformat(reg2)+", [rsp"+
+            (off >= 0 ? "+" : "") + std::to_string(off) + "]");
+        }
+        else {
+            auto srcregS = inferRegisterType(op.src);
+            auto reg1 = BlockCtx.MoveOperandToTargetReg(srcregS,op.src,InstIdx,{reg2});
+            BlockCtx.ASMcode.push_back(movType+Eformat(reg2)+", ["+Eformat(reg1)+"]");
+        }
+    } else if(op.memOP == IR::memOpInst::store) {
+        //mov src dst
+        std::string movType="mov ";
+        if(op.src.datatype == IR::Operand::f32) {
+            movType = "movss ";
+        }
+        auto srcregS = inferRegisterType(op.src);
+        auto reg2 = BlockCtx.MoveOperandToTargetReg(srcregS,op.src,InstIdx,{});
+        if(BlockCtx.IRlocMap[op.dst]->isStackPtr) {
+            //不用分配reg1
+            int64_t off = BlockCtx.culRspOff(BlockCtx.IRlocMap[op.dst]->rbpOffset);
+            BlockCtx.ASMcode.push_back(movType+"[rsp" + std::string("") +
+            (off >= 0 ? "+" : "") + std::to_string(off) + "]" +", " + Eformat(reg2));
+        }
+        else {
+            auto dstregS = inferRegisterType(op.dst);
+            auto reg1 = BlockCtx.MoveOperandToTargetReg(dstregS,op.dst,InstIdx,{reg2});
+            BlockCtx.ASMcode.push_back(movType+"["+Eformat(reg1)+"], "+Eformat(reg2));
+        }
+    }
+    return true;
+}
+
+inline bool printASMGen(IR::printInst& op, size_t InstIdx ,BaseBlockContext & BlockCtx) {
+    BlockCtx.MoveOperandToTargetReg({EAX},op.src,InstIdx);
+    std::vector<std::string> assembly = {
+        "push   rax",
+        "push   rbx",
+        "push   rcx",
+        "push   rdx",
+        "push   rdi",
+        "push   rsi",
+        "push   rbp",
+        "mov    ebx, eax",           // 保存原始值到ebx
+        "xor    ecx, ecx",           // ecx = 数字位数计数器
+        "test   eax, eax",
+        "jns    positive_label",     // 如果是非负数，跳过负数处理
+        
+        // 处理负数
+        "neg    eax",
+        "push   '-'",                // 压入负号
+        "inc    ecx",                // 计数器+1
+        "jmp    digit_loop_start",
+        
+        "positive_label:",
+        // 处理0的特殊情况
+        "test   eax, eax",
+        "jnz    digit_loop_start",
+        "push   '0'",                // 如果是0，直接压入'0'
+        "inc    ecx",
+        "jmp    prepare_write",
+        
+        "digit_loop_start:",
+        // 将数字各位ASCII码压入栈（反向）
+        "mov    edi, 10",
+        "digit_loop:",
+        "xor    edx, edx",          // 清零edx用于除法
+        "div    edi",               // eax = eax/10, edx = eax%10
+        "add    dl, '0'",           // 转换为ASCII
+        "push   rdx",               // 压入数字字符（注意是8字节push）
+        "inc    ecx",               // 位数+1
+        "test   eax, eax",
+        "jnz    digit_loop",        // 如果eax!=0，继续循环
+        
+        "prepare_write:",
+        // 添加换行符
+        "push   0x0A",              // '\n'的ASCII码
+        "inc    ecx",
+        
+        // 准备系统调用参数
+        "mov    rsi, rsp",          // rsi = 字符串地址（栈顶）
+        "mov    edx, ecx",          // edx = 字符数
+        "mov    edi, 1",            // edi = 文件描述符（1=STDOUT）
+        "mov    eax, 1",            // eax = 系统调用号（1=write）
+        "push  rcx",
+        "syscall",
+        "pop  rcx",
+        // 回收栈空间（每个字符占用8字节）
+        "lea    rsp, [rsp + rcx*8]",
+        
+        // 恢复所有寄存器（逆序）
+        "pop    rbp",
+        "pop    rsi",
+        "pop    rdi",
+        "pop    rdx",
+        "pop    rcx",
+        "pop    rbx",
+        "pop    rax"
+    };
+    BlockCtx.ASMcode.insert(BlockCtx.ASMcode.end(),assembly.begin(),assembly.end());
+    return true;
+}
+
+
+inline bool FuncASMGenerator::BaseBlockASMGen(BaseBlockContext & BlockCtx ,IR::IRBaseBlock & IRblock) {
     //调用前，BlockCtx已完成初始化，可以直接用
     auto & Inst = IRblock.Insts;
     auto & asmCode = BlockCtx.ASMcode;
@@ -762,6 +1145,7 @@ inline bool BaseBlockASMGen(FuncASMGenerator & ASMGen,BaseBlockContext & BlockCt
         auto & inst = Inst[instIdx];
         std::visit(overload {
             [&](IR::BinaryOpInst& op) {
+                BinaryOpASMGen(op,instIdx,*this,BlockCtx,IRblock);
                 return true;
             },
             [&](IR::callOpInst& op) {
@@ -774,21 +1158,27 @@ inline bool BaseBlockASMGen(FuncASMGenerator & ASMGen,BaseBlockContext & BlockCt
             },
             [&](IR::memOpInst& op) {
                 //注意操作数类型
-                if(op.memOP == IR::memOpInst::load) {
-
-                } else if(op.memOP == IR::memOpInst::store) {
-
-                }
+                memOpASMGen(op,instIdx,*this,BlockCtx,IRblock);
                 return true;
                 
             },
             [&](IR::retInst& op) {
-                //到达函数末尾
+                //到达函数末尾  //返回值ABI要求
+                if(op.src.datatype == IR::Operand::i32) {
+                    BlockCtx.MoveOperandToTargetReg({EAX},op.src,instIdx);
+                }
+                if(op.src.datatype == IR::Operand::f32) {
+                    BlockCtx.MoveOperandToTargetReg({XMM0},op.src,instIdx);
+                }
+                if(op.src.datatype == IR::Operand::ptr) {
+                    BlockCtx.MoveOperandToTargetReg({EAX},op.src,instIdx);
+                }
+                BlockCtx.RETrestore();
+                BlockCtx.emit("ret");
                 return true;
-                
             },
             [&](IR::printInst& op) {
-                
+                printASMGen(op,instIdx,BlockCtx);
                 return true;
                 
             },
@@ -798,8 +1188,94 @@ inline bool BaseBlockASMGen(FuncASMGenerator & ASMGen,BaseBlockContext & BlockCt
                 if(!op.is_conditional) {
                     asmCode.push_back("jmp "+toString(op.trueLabel.format()));
                     //进行栈同步，总是对后继进行同步，如果后继没有生成，则说明后继会继承当前（深度优先生成）
-                } else {
+                    //无条件跳转，后继唯一
+                    auto tar = *IRblock.successor.begin();
+                    if(!this->BlockInfoMap[tar].generated) return true;
 
+                    auto syncASM = BlockCtx.sync_to(*this->BlockInfoMap[tar].initialCtx.get());
+                    asmCode.insert(asmCode.end(),syncASM.begin(),syncASM.end());
+
+                } else {
+                    //查找true后继 如果需要修改，则jmp到一个临时标签，修改完了，再jmp到之前的标签
+                    string jmpType;
+                    auto cmpinst = std::get<IR::BinaryOpInst>(Inst[instIdx-1]);
+                    switch (cmpinst.cmp_type) {
+                    case IR::BinaryOpInst::cmpType::EQ:
+                        jmpType = "je";
+                        break;
+                    case IR::BinaryOpInst::cmpType::G:
+                        jmpType = "jg";
+                        break;
+                    case IR::BinaryOpInst::cmpType::GE:
+                        jmpType = "jge";
+                        break;
+                    case IR::BinaryOpInst::cmpType::L:
+                        jmpType = "jl";
+                        break;
+                    case IR::BinaryOpInst::cmpType::LE:
+                        jmpType = "jle";
+                        break;
+                    case IR::BinaryOpInst::cmpType::NE:
+                        jmpType = "jne";
+                        break;
+                    default:
+                        std::cerr<<"ASM不支持的比较\n";
+                        return false;
+                    }
+                    IR::IRBaseBlock * trueBlock;
+                    IR::IRBaseBlock * falseBlock;
+                    for(auto * successor : IRblock.successor ) {
+                        if(successor->enterLabel == op.trueLabel) {
+                            trueBlock = successor;
+                            break;
+                        }
+                    }
+
+                    //查找false后继
+                    for(auto * successor : IRblock.successor ) {
+                        if(successor->enterLabel == op.falseLabel) {
+                            falseBlock = successor;
+                            break;
+                        }
+                    }
+                    string asmJ;
+                    std::vector<string> asmT;
+                    std::vector<string> asmF;
+                    if(this->BlockInfoMap[trueBlock].generated) {
+                        //同步
+                        //生成随机label
+                        string randomLabel = std::format("jsync__{}",BlockCtx.next_id++);
+                        auto syncASM = BlockCtx.sync_to(*this->BlockInfoMap[trueBlock].initialCtx.get());
+                        if(!syncASM.empty()) {
+                            asmJ = std::format("{} {}",jmpType,randomLabel);
+                            asmT = syncASM;
+                            asmT.push_back(std::format("jmp {}",toString_view(op.trueLabel.format())));
+                        }
+                        else {
+                            asmJ = std::format("{} {}",jmpType,toString_view(op.trueLabel.format()));
+                        }
+                        
+                    } else {
+                        //不同步
+                        asmJ = std::format("{} {}",jmpType,toString_view(op.trueLabel.format()));
+                    }
+                    
+                    if(this->BlockInfoMap[falseBlock].generated) {
+                        //同步
+                        auto syncASM = BlockCtx.sync_to(*this->BlockInfoMap[trueBlock].initialCtx.get());
+                        if(!syncASM.empty()) {
+                            asmF = syncASM;
+                        }
+                        else {
+                            asmF.emplace_back(std::format("jmp {}",toString_view(op.falseLabel.format())));
+                        }
+                    } else {
+                        //不同步
+                        asmF.emplace_back(std::format("jmp {}",toString_view(op.falseLabel.format())));
+                    }
+                    asmCode.push_back(asmJ);
+                    asmCode.insert(asmCode.end(),asmF.begin(),asmF.end());
+                    asmCode.insert(asmCode.end(),asmT.begin(),asmT.end());
                 }
                 return true;
                 
@@ -818,8 +1294,171 @@ inline bool BaseBlockASMGen(FuncASMGenerator & ASMGen,BaseBlockContext & BlockCt
     return true;
 }
 
+
+
+inline void test_ASM_main() {
+    auto start = std::chrono::high_resolution_clock::now();
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    
+
+    auto astbase = parserGen(
+        u8"C:/code/CPP/Compiler-Lab/grammar/grammar.txt",
+        u8"C:/code/CPP/Compiler-Lab/grammar/terminal.txt",
+        u8"C:/code/CPP/Compiler-Lab/grammar/SLR1ConflictReslove.txt"
+    );
+
+    std::ofstream o("output.json");
+    nlohmann::json j = astbase;
+    o << std::setw(4) << j;  // std::setw(4) 控制缩进
+    o.close();
+    std::ifstream file("output.json");
+    nlohmann::json j2;
+    file >> j2;  // 从文件流解析
+    ASTbaseContent astbase2 = j2;
+    AST::AbstractSyntaxTree astT(astbase2);
+    std::string myprogram = R"(
+
+    void swap(int *a,int *b) {
+        int temp = *a;
+        *a = *b;
+        *b = temp;
+        return;
+    }
+
+    float acc() {
+    int a = 1;
+    int b = 2;
+    a = 10 + b;
+    b = 20 + a;
+
+    if (a < b) {
+        return 1 ;
+    }
+    return 0;
+}
+    )";
+    auto ss = Lexer::scan(toU8str(myprogram));
+    for(int i= 0 ;i < ss.size() ; i++) {
+        auto q = ss[i];
+        std::cout<<"["<<toString(q.type)<<" "<<toString(q.value)<<" "<<i<<"]";
+    }
+    std::cout<<"\n";
+    astT.BuildSpecifiedAST(ss);
+    //printCommonAST(astT.root);
+    AST::mVisitor v;
+    //astT.root->accept(v);
+    std::cout<<std::endl;
+        std::u8string myprogram2 = u8R"(
+    int factorial(int n,float b) {
+        if (n == 0) {
+            return 1;
+        }
+            return n * factorial(n + -1,0.0);
+        }
+
+    int main() {
+        int a;
+        int * b;
+        int c;
+        b = &a;
+        while ( a < c) {
+            a = a + 1;
+        }
+        if (a<c) {
+            a = a + 1 ;
+        }
+        else {
+            c = c + 1;
+        }
+        return factorial(5,5);
+    }
+
+    )";
+    // auto ss2 = Lexer::scan(toU8str(myprogram2));
+    // for(int i= 0 ;i < ss2.size() ; i++) {
+    //     auto q = ss2[i];
+    //     std::cout<<"["<<toString(q.type)<<" "<<toString(q.value)<<" "<<i<<"]";
+    // }
+    // std::cout<<std::endl;
+    // astT.BuildSpecifiedAST(ss2);
+
+    Semantic::ASTContentVisitor v2;
+    AST::ConstantFoldingVisitor v3;
+    Semantic::SymbolTableBuildVisitor v4;
+    Semantic::TypingCheckVisitor v5;
+    Semantic::SemanticSymbolTable tmp;
+    //v2.moveSequence = true;
+    astT.root->accept(v3);
+    astT.root->accept(v2);
+    
+    v4.build(&tmp,&astT);
+    tmp.checkTyping();
+    astT.root->accept(v2);
+    Semantic::ExprTypeCheckMap ExprMap;
+    v5.build(&tmp,&astT,&ExprMap);
+    tmp.arrangeMem();
+    tmp.printTable();
+    IR::IRContent irbase;
+    IR::EntryOperandMap entry_map;
+    IR::IRGenVisitor v6;
+    v6.build(&tmp,&astT,&irbase,&ExprMap,&entry_map);
+    irbase.print();
+
+    FuncASMGenerator g1;
+    g1.generateFunction(irbase.FunctionIR[0]);
+
+    std::cout<<"stop\n";
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    std::cout << "Function took " 
+              << duration.count() << " microseconds (" 
+              << duration.count() / 1000.0 << " milliseconds) to execute.\n";
+    return;
+    
+}
+
+
+
+
+
+
 } // namespace ASM
 
 
 
 #endif
+
+
+
+// std::visit(overload {
+// [&](IR::BinaryOpInst& op) {
+//     if(op.op == IR::BinaryOpInst::add) {
+//     return true;
+// },
+// [&](IR::callOpInst& op) {
+//     
+//     return true;
+// },
+// [&](IR::allocaOpInst& op) {
+//     return true;
+// },
+// [&](IR::memOpInst& op) {
+//     return true;
+// },
+// [&](IR::retInst& op) {
+//     return true;
+// },
+// [&](IR::printInst& op) {
+//     return true;
+// },
+// [&](IR::BrInst& op) {
+//     return true;
+// },
+// [&](IR::phiInst& op) {
+//     return false;
+// },
+// [&](IR::labelInst& op) {
+//     return true;            
+// }
+// }, inst);
