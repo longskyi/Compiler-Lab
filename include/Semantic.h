@@ -189,9 +189,9 @@ public:
         return nullptr;
     }
     inline void printTable(int depth = 0 , std::ostream& out = std::cout) {
-        auto ptab = [depth](int a = 1){
+        auto ptab = [depth,&out](int a = 1){
             for(int i = 0 ; i< depth + a ; i ++)
-                std::cout<<"    "; // 4 spaces
+                out<<"    "; // 4 spaces
         };
         ptab(0);
         out<<std::format("{}@Table[\n",toString_view(tabletag));
@@ -212,10 +212,10 @@ public:
             ptab();
             if(entries[i]->is_block) {
                 out<<std::format("(type: block)\n");
-                entries[i]->subTable->printTable(depth+1);
+                entries[i]->subTable->printTable(depth+1,out);
             } else if(entries[i]->Type.basicType == AST::FUNC) {
                 out<<std::format("(name:{},uniqueId:{},type: FUNC[{}])\n",toString_view(entries[i]->symbolName),size_t(entries[i]->symid),toString_view(entries[i]->Type.format()));
-                entries[i]->subTable->printTable(depth+1);
+                entries[i]->subTable->printTable(depth+1,out);
             }
             else {
                 out<<std::format("(name:{},uniqueId:{},type:{},offset:{},sizeof:{},align:{})\n",toString_view(entries[i]->symbolName),size_t(entries[i]->symid),toString_view(entries[i]->Type.format()),entries[i]->offset,entries[i]->Type.sizeoff(),entries[i]->Type.alignmentof());
@@ -389,7 +389,7 @@ public:
         if(gotError) {
             std::cerr<<"符号表生成出现错误"<<std::endl;
         }
-        return gotError;
+        return !gotError;
     }
 };
 
@@ -494,10 +494,10 @@ public:
         tree->root->accept(*this);
         if(gotERROR) {
             std::cerr<<"类型检查未通过\n";
+            return false;
         }
-        else 
-            std::cout<<"类型检查pass完成\n";
-        return false;
+        std::cout<<"类型检查pass完成\n";
+        return true;
     }
     
     inline void enter(AST::ASTNode * node) override{
@@ -527,6 +527,7 @@ public:
         }
     }
     inline void quit(AST::ASTNode * node) override {
+        if(gotERROR) {return;}
         if(ASTstack.empty()) {
             gotERROR = true;
             ERRORstr = u8"Visitor AST栈深度结构损坏";
@@ -575,41 +576,44 @@ public:
 };
 
 class ASTContentVisitor : public AST::ASTVisitor {
-int depth = 0;
+    int depth = 0;
+    std::ostream & out = std::cout;
 public:
+    inline ASTContentVisitor() = default;
+    inline ASTContentVisitor(std::ostream & out_) :out(out_) {}
     bool moveSequence = false;
 
     inline void print(AST::ASTNode * node) {
-    std::cout<<ASTSubTypeToString(node->subType);
+    out<<ASTSubTypeToString(node->subType);
         if(dynamic_cast<AST::ArithExpr *>(node)) {
             auto eptr = static_cast<AST::ArithExpr *>(node);
             if(eptr->Op == AST::BinaryOpEnum::ADD) {
-                std::cout<<" +";
+                out<<" +";
             } else if(eptr->Op == AST::BinaryOpEnum::MUL) {
-                std::cout<<" *";
+                out<<" *";
             }
         }
         if(dynamic_cast<AST::ConstExpr *>(node)) {
-            std::cout<<" ";
+            out<<" ";
             auto eptr = static_cast<AST::ConstExpr *>(node);
             auto v = eptr->value;
             auto visitors = overload {
-                [](int v) {std::cout<<v;},
-                [](float v) {std::cout<<v;},
-                [](uint64_t v) {std::cout<<v;},
+                [this](int v) {out<<v;},
+                [this](float v) {out<<v;},
+                [this](uint64_t v) {out<<v;},
             };
             std::visit(visitors,v);
         }
         if(dynamic_cast<AST::SymIdNode *>(node)) {
-            std::cout<<" ";
+            out<<" ";
             auto eptr = static_cast<AST::SymIdNode *>(node);
-            std::cout<<toString_view(eptr->Literal)<<" ";
+            out<<toString_view(eptr->Literal)<<" ";
             if(eptr->symEntryPtr) {
-                std::cout<<static_cast<SymbolEntry*>(eptr->symEntryPtr)->symid<<" ";
+                out<<static_cast<SymbolEntry*>(eptr->symEntryPtr)->symid<<" ";
             }
             
         }
-        std::cout<<std::endl;
+        out<<std::endl;
     }
 
     virtual void visit(AST::ASTNode* node) {
@@ -622,7 +626,7 @@ public:
         
         if(!moveSequence) {
             for(int i = 0 ;i <depth;i++) {
-                std::cout<<" ";
+                out<<" ";
             }
             this->print(node); 
         }

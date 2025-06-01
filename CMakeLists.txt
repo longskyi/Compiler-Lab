@@ -30,6 +30,7 @@ set(SOURCE
     ${CMAKE_CURRENT_LIST_DIR}/src/Semantic.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/irGen.cpp
     ${CMAKE_CURRENT_LIST_DIR}/src/irOptimize.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/x64asmGen.cpp
     ${ASTSOURCE}
     )
 

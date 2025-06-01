@@ -118,7 +118,6 @@ bool AbstractSyntaxTree::BuildCommonAST(const std::vector<Lexer::scannerToken_t>
 }
 
 bool AbstractSyntaxTree::BuildSpecifiedAST(const std::vector<Lexer::scannerToken_t> & tokens) {
-    //Not fully implement
         if(tokens.back().value != u8"$") {
         std::cerr<<"tokens末尾非结束符";
         return false;
@@ -161,7 +160,7 @@ bool AbstractSyntaxTree::BuildSpecifiedAST(const std::vector<Lexer::scannerToken
             }
             std::cerr << " Expected token:[";
             for(const auto & s : expectedSym ) {
-                std::cerr <<"\"" <<toString(s) <<"\",";
+                std::cerr <<"\"" <<toString(s) <<"\" ";
             }
             std::cerr <<"]"<<std::endl;
             return false;
@@ -314,6 +313,8 @@ unique_ptr<ASTNode> AST_specified_node_construct(unique_ptr<NonTermProdNode> pro
     ret = pTypeList::try_constructS(prodNode.get(),ast_tree);
     if(ret) { return ret; }
     ret = Dimensions::try_constructS(prodNode.get(),ast_tree);
+    if(ret) { return ret; }
+    ret = StmtPrint::try_constructS(prodNode.get(),ast_tree);
     if(ret) { return ret; }
     std::cerr <<"构造失败"<< toString_view(LCMPFileIO::formatProduction(ast_tree->Productions.at(prodNode->prodId),ast_tree->symtab));
     

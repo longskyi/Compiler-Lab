@@ -704,7 +704,7 @@ void parserGen_test_main() {
 }
 
 
-ASTbaseContent parserGen(std::filesystem::path grammarFile , std::filesystem::path terminalsFile , std::filesystem::path SLRruleFile) {
+ASTbaseContent parserGen(std::filesystem::path grammarFile , std::filesystem::path terminalsFile ,std::optional<std::filesystem::path> SLRruleFile) {
     ASTbaseContent ret;
 
     std::unordered_map<ProductionId,Production> Productions;
@@ -751,7 +751,8 @@ ASTbaseContent parserGen(std::filesystem::path grammarFile , std::filesystem::pa
     }
 
     std::vector<ForceReducedProd> forceReducedProd;
-    forceReducedProd = LCMPFileIO::parseProdFileR(SLRruleFile);
+    if(SLRruleFile.has_value())
+        forceReducedProd = LCMPFileIO::parseProdFileR(SLRruleFile.value());
     bool success = generateSLRTable(states,actionTable,gotoTable,symtab,Productions,forceReducedProd,FOLLOW,NonTerminalId(symtab.find_index(u8"START").value()));
 
 

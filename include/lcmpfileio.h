@@ -5,7 +5,8 @@
 #include"SyntaxType.h"
 #include"parserGen.h"
 #include"templateUtil.h"
-
+#include<string>
+#include<fstream>
 
 template <typename Tag, typename T>
 void to_json(nlohmann::json& j, const StrongId<Tag, T>& id) {
@@ -163,7 +164,22 @@ void readTerminals(SymbolTable & symtable,std::filesystem::path terminalPath);
 
 void readProductionRule(SymbolTable & symtable,std::vector<Production> & productions , std::filesystem::path rulePath);
 
+inline std::string readFileToString(const std::filesystem::path& filePath) {
+    std::ifstream file(filePath, std::ios::binary | std::ios::ate);
+    if (!file) {
+        throw std::runtime_error("无法打开文件: ");
+    }
 
+    auto fileSize = std::filesystem::file_size(filePath);
+    std::string content;
+    content.resize_and_overwrite(fileSize, [&](char* buf, size_t) {
+        file.seekg(0);
+        file.read(buf, fileSize);
+        return fileSize;
+    });
+
+    return content;
+}
 
 
 

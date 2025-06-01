@@ -43,36 +43,38 @@ unique_ptr<ASTNode> AST_specified_node_construct(unique_ptr<NonTermProdNode> pro
 class ASTEnumTypeVisitor : public ASTVisitor {
 int depth = 0;
 public:
+    inline ASTEnumTypeVisitor() = default;
+    inline ASTEnumTypeVisitor(std::ostream & out_) : out(out_) {}
     bool moveSequence = false;
-
+    std::ostream & out = std::cout;
     inline void print(ASTNode * node) {
-    std::cout<<ASTSubTypeToString(node->subType);
+        out<<ASTSubTypeToString(node->subType);
         if(dynamic_cast<ArithExpr *>(node)) {
             auto eptr = static_cast<ArithExpr *>(node);
             if(eptr->Op == BinaryOpEnum::ADD) {
-                std::cout<<" +";
+                out<<" +";
             } else if(eptr->Op == BinaryOpEnum::MUL) {
-                std::cout<<" *";
+                out<<" *";
             }
         }
         if(dynamic_cast<ConstExpr *>(node)) {
-            std::cout<<" ";
+            out<<" ";
             auto eptr = static_cast<ConstExpr *>(node);
             auto v = eptr->value;
             auto visitors = overload {
-                [](int v) {std::cout<<v;},
-                [](float v) {std::cout<<v;},
-                [](uint64_t v) {std::cout<<v;},
+                [&](int v) {out<<v;},
+                [&](float v) {out<<v;},
+                [&](uint64_t v) {out<<v;},
             };
             std::visit(visitors,v);
         }
         if(dynamic_cast<SymIdNode *>(node)) {
-            std::cout<<" ";
+            out<<" ";
             auto eptr = static_cast<SymIdNode *>(node);
-            std::cout<<toString_view(eptr->Literal)<<" ";
+            out<<toString_view(eptr->Literal)<<" ";
             
         }
-        std::cout<<std::endl;
+        out<<std::endl;
     }
 
     virtual void visit(ASTNode* node) {
@@ -85,7 +87,7 @@ public:
         
         if(!moveSequence) {
             for(int i = 0 ;i <depth;i++) {
-                std::cout<<" ";
+                out<<" ";
             }
             this->print(node); 
         }

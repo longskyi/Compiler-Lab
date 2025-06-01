@@ -172,7 +172,7 @@ public:
             case OperandType::i32:      ret += u8"i%";    break;
             case OperandType::ptr:      ret += u8"p%";    break;
             case OperandType::f32:      ret += u8"f%";    break;
-            case OperandType::LABEL:    ret += u8"L%";      break;
+            case OperandType::LABEL:    ret += u8"L";      break;
             }
             if (LiteralName.empty()) {
                 ret += toU8str(std::to_string(unique_id));  // %42
@@ -550,7 +550,6 @@ public:
                     out << toString_view(IRformat(inst)) << "\n";
                 }
             }
-            out << "}\n";
         }
     }
 
@@ -746,6 +745,7 @@ inline bool IRGenVisitor::build(Semantic::SemanticSymbolTable* symtab, AST::Abst
             newvar.VarPos = Operand::allocVAR(newvar.name,Operand::GLOBAL);
             if(EntrySymMap->count(SymEntry_ptr)) {
                 std::cerr<<"全局变量分配内部错误\n";
+                return false;
             }
             (*EntrySymMap)[SymEntry_ptr] = newvar.VarPos;
             IRbase->globalVar.push_back(newvar);
@@ -757,6 +757,7 @@ inline bool IRGenVisitor::build(Semantic::SemanticSymbolTable* symtab, AST::Abst
             curr_func_entry = rootTable->lookup(func->id_ptr->Literal);
             if(!curr_func_entry) {
                 std::cerr<<"内部错误，函数定义阶段出现错误\n";
+                return false;
             }
             FunctionIR funcIR;
             funcIR.funcName = func->id_ptr->Literal;
@@ -766,14 +767,19 @@ inline bool IRGenVisitor::build(Semantic::SemanticSymbolTable* symtab, AST::Abst
             auto SymEntry_ptr = static_cast<Semantic::SymbolEntry*>(func->id_ptr->symEntryPtr);
             if(EntrySymMap->count(SymEntry_ptr)) {
                 std::cerr<<"函数分配内部错误\n";
+                return false;
             }
             (*EntrySymMap)[SymEntry_ptr] = funcIR.FuncPos;
             curr_fucntion_ir = &funcIR;
             auto argOps = parseFuncAlloca(funcIR,SymEntry_ptr,this);
             funcIR.Args = argOps;
             funcBlock->accept(*this);
-            splitIRblock(funcIR);
-            mergeLinearBlocks(funcIR);
+            if(!splitIRblock(funcIR)) {
+                return false;
+            }
+            if(!mergeLinearBlocks(funcIR)) {
+                return false;
+            }
             IRbase->FunctionIR.emplace_back(std::move(funcIR));
             //树上遍历
         }

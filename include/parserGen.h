@@ -12,7 +12,7 @@ typedef struct ASTbaseContent {
     std::unordered_map<ProductionId, Production> Productions;
 }ASTbaseContent;
 
-ASTbaseContent parserGen(std::filesystem::path grammarFile , std::filesystem::path terminalsFile , std::filesystem::path SLRruleFile);
+ASTbaseContent parserGen(std::filesystem::path grammarFile , std::filesystem::path terminalsFile ,std::optional<std::filesystem::path> SLRruleFile);
 std::u8string formatProduction(const Production& prod, size_t dot_pos, const SymbolTable& symtab);
 
 #endif

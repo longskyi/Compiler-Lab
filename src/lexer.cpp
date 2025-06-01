@@ -348,6 +348,7 @@ mScanner_ret scannerAgentU8(const std::u8string & u8input ,const std::string & i
     {
         //没有成功推进
         ret.type="ERR";
+        ret.value = input[start_index];
         ret.next_start = start_index+1;
     }
     return ret;

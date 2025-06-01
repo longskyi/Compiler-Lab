@@ -90,7 +90,7 @@ u8string IRformat(const IRinst inst) {
         // 5. 返回指令
         [](const retInst& ret) -> u8string {
             if (ret.src.empty()) {
-                return u8"ret void";
+                return u8"ret";
             }
             return u8"ret " + ret.src.format();
         },
@@ -260,7 +260,7 @@ Operand genCallInst(std::deque<IRinst> & insts ,AST::SymIdNode * func_id,IRGenVi
     call_inst.targetFUNC = func; 
     Operand dst;
     if(typing.eType->basicType != AST::baseType::VOID) {
-        dst = Operand::allocOperand(fetchIdType(func_id,irgen),u8"ret");
+        dst = Operand::allocOperand(TypingSystem2OperandType(*typing.eType.get()),u8"ret");
     }
     call_inst.ret = dst;
     insts.push_back(call_inst);
@@ -570,7 +570,9 @@ bool parseExprIRGen(AST::Expr * Expr_ptr,IRGenVisitor * IRGenerator) {
             Context.erase(expr_ptr);
         }
         auto ret = genCallInst(curr_code,id_ptr,IRGenerator,paramOperands);
-        Context[callExpr_ptr].expr_addr = ret;
+        auto & TypingNode = IRGenerator->ExprTypeMap->at(Expr_ptr);
+        auto cast_op = TypingNode.cast_op;
+        Context[callExpr_ptr].expr_addr = genCastInst(curr_code, cast_op, ret);
         Context[Expr_ptr].code = std::move(curr_code);
     }
     if(Expr_ptr->subType == AST::ASTSubType::DerefExpr) {
@@ -639,6 +641,10 @@ bool parseControlIRGenQUIT(AST::Stmt* stmt_ptr, IRGenVisitor* IRGenerator) {
             merged_code.push_back(labelInst(Context[stmt_ptr].BoolTrueLabel));
             auto& then_ctx = Context[br_ptr->if_stmt_ptr.get()];
             merged_code.insert(merged_code.end(), then_ctx.code.begin(), then_ctx.code.end());
+            BrInst jmpElse;
+            jmpElse.is_conditional = false;
+            jmpElse.trueLabel = Context[stmt_ptr].BoolFalseLabel;
+            merged_code.push_back(jmpElse);
             merged_code.push_back(labelInst(Context[stmt_ptr].BoolFalseLabel));
             Context.erase(br_ptr->if_stmt_ptr.get());
         } 

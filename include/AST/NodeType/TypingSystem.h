@@ -459,7 +459,7 @@ public:
         }
         //PTR TO INT情况
         if (basicType == BASE_PTR && target->basicType == INT) {
-            return {PTR_TO_INT, u8"指针到整型的隐式转换（可能不安全）"};
+            return {INVALID, u8"指针到整型的转换"};
         }
         // 4. 数值类型转换检查
         if ((basicType == INT || basicType == FLOAT) && 

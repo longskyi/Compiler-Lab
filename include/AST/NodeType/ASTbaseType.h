@@ -265,7 +265,7 @@ class mVisitor : public ASTVisitor {
         return;
     }
     inline void visit(ASTCommonNode * node) {
-        std::cerr << toString(node->value)<<" ";
+        std::cout << toString(node->value)<<" ";
         return;
     }
     inline virtual void enter(ASTNode* node) override {

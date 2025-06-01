@@ -81,8 +81,11 @@ bool splitIRblock(FunctionIR & funcIR) {
             baseBlock->enterLabel = inst.label;
             for(size_t i = curr_head ; i <= funcIR.Instblock.size();i++) {
                 if( i == funcIR.Instblock.size()) {
-                    std::cerr<<"IR生成失败，控制流不存在ret命令\n";
-                    return false;
+                    // std::cerr<<"IR生成失败，控制流不存在ret命令\n";
+                    // return false;
+                    baseBlock->Insts.push_back(retInst());
+                    curr_head = i+1;
+                    break;
                 }
                 //只有branch（含无条件跳转）和ret可以作为基本块终点，label目前可以，不过后面可能可以合并（唯一前继）
                 if(auto ret = std::get_if<retInst>(&funcIR.Instblock[i])) {

@@ -105,6 +105,7 @@ bool parseExprCheck(AST::Expr * mainExpr_ptr , ExprTypeCheckMap & ExprMap) {
             const auto paramExpr_ptr = paramT->expr_ptr.get();
             //忽略 id_ptr 和 Op
             auto & paramTypeNode = ExprMap.at(paramExpr_ptr);
+            paramTypeNode.ret_is_left_value = false;
             auto [cast_op,msg] = paramTypeNode.retType.cast_to(argType);
             if(cast_op == AST::CAST_OP::INVALID) {
                 std::cerr<<std::format("函数调用，类型转换失败，源类型{}，无法转换成{}\n",
@@ -597,6 +598,7 @@ bool parseReturnCheck(AST::Return * return_ptr , SemanticSymbolTable * rootTable
     }
     else {
         auto ExprType = ExprMap.at(return_ptr->expr_ptr.value().get()).retType;
+        ExprMap.at(return_ptr->expr_ptr.value().get()).ret_is_left_value = false;
         auto [cast_op,msg] = ExprType.cast_to(&retType);
         if(cast_op == AST::CAST_OP::INVALID) {
             std::cerr<<std::format("return Expr，类型转换失败，源类型{}，无法转换成{}\n",
