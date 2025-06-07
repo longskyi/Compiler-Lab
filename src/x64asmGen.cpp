@@ -712,9 +712,15 @@ public:
                 std::cerr << "警告：寄存器类型不匹配的移动\n";
                 return NONE;
             }
-        } else if(src.memplace == IR::Operand::GLOBAL && src.datatype == IR::Operand::i32) {
+        // } else if(src.memplace == IR::Operand::GLOBAL && src.datatype == IR::Operand::i32) {
+        //     //从data section中取数据
+        //     emit(std::format("lea {} , {}[rip]",Eformat(targetReg),toString_view(src.LiteralName)));
+        } else if(src.memplace == IR::Operand::GLOBAL && src.datatype == IR::Operand::ptr) {
             //从data section中取数据
+            //这里global留了一个坑，这么做是不能使用extern的
             emit(std::format("lea {} , {}[rip]",Eformat(targetReg),toString_view(src.LiteralName)));
+            
+            //emit(std::format("mov {} ,[{}]",Eformat(targetReg),Eformat(targetReg)));
         }
         // 更新寄存器状态
         for (auto& reg : RegFile) {
@@ -1300,10 +1306,9 @@ bool printASMGen(IR::printInst& op, size_t InstIdx ,BaseBlockContext & BlockCtx)
         "syscall",
         "mov    rsp , rbx",
         "pop  rcx",
-        // 回收栈空间（每个字符占用8字节）
         "lea    rsp, [rsp + rcx]",
         
-        // 恢复所有寄存器（逆序）
+        // 恢复所有寄存器
         "pop    rbp",
         "pop    rsi",
         "pop    rdi",
@@ -1530,7 +1535,7 @@ bool FuncASMGenerator::BaseBlockASMGen(BaseBlockContext & BlockCtx ,IR::IRBaseBl
                     
                     if(this->BlockInfoMap[falseBlock].generated) {
                         //同步
-                        auto syncASM = BlockCtx.sync_to(*this->BlockInfoMap[trueBlock].initialCtx.get());
+                        auto syncASM = BlockCtx.sync_to(*this->BlockInfoMap[falseBlock].initialCtx.get());
                         if(!syncASM.empty()) {
                             asmF = syncASM;
                         }

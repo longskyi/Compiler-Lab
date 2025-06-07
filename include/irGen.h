@@ -85,6 +85,7 @@ public:
         IMM, //立即数
         GLOBAL, //全局
         STACK,    //栈
+        EXTERN,   //外部符号
     };
     OperandType datatype = noneinit;
     MemPlace memplace = IMM;
@@ -145,6 +146,7 @@ public:
 
         u8string ret;
         switch (memplace) {
+        case MemPlace::EXTERN:
         case MemPlace::GLOBAL:
             // 全局变量格式: 类型@LiteralName（忽略 unique_id）
             switch (datatype) {

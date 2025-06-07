@@ -13,6 +13,11 @@
 #include "parserGen.h"
 #include "asmGen.h"
 #include "AST/AST.h"
+
+#ifdef _WIN32
+#include "Windows.h"
+#endif
+
 namespace fs = std::filesystem;
 
 struct SLRParams {
@@ -190,13 +195,14 @@ void process_slr(const SLRParams& params) {
     );
 
     std::string output_filename = params.output_name + ".json";
-    std::cout << "输出文件: " << output_filename << "\n";
+    std::cout<<std::format("输出文件: {}.json {}goto.tsv {}action.tsv\n",params.output_name,params.output_name,params.output_name);
 
     std::ofstream o(output_filename);
     nlohmann::json j = astbase;
     o << std::setw(4) << j;  // std::setw(4) 控制缩进
     o.close();
-
+    LCMPFileIO::toFile(astbase.gotoTable,astbase.symtab,params.output_name+"goto.tsv");
+    LCMPFileIO::toFile(astbase.actionTable,astbase.symtab,params.output_name+"action.tsv");
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
     
@@ -325,10 +331,10 @@ void process_s(const SParams& params) {
         return;
     }
 
-    std::cout<<"运行成功\n";
+    std::cout<<"生成成功\n";
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    std::cout << "Function took " 
+    std::cout << "Program took " 
               << duration.count() << " microseconds (" 
               << duration.count() / 1000.0 << " milliseconds) to execute.\n";
     
@@ -336,8 +342,13 @@ void process_s(const SParams& params) {
 
 int main(int argc, const char* argv[]) {
 
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+#endif
+
     int argcT = 4;
-    const char * testargv [] ={"","-s","-i=testCase/24.src","-o=test"};
+    const char * testargv [] ={"","-s","-i=testCase/2.src","-o=2s"};
     
     auto params = parse_args(argc, argv);
     //auto params = parse_args(argcT, testargv);

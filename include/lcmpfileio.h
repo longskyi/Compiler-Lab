@@ -7,7 +7,7 @@
 #include"templateUtil.h"
 #include<string>
 #include<fstream>
-
+#include <set>
 template <typename Tag, typename T>
 void to_json(nlohmann::json& j, const StrongId<Tag, T>& id) {
     j = id.value; // 直接使用 T 的类型
@@ -182,5 +182,16 @@ inline std::string readFileToString(const std::filesystem::path& filePath) {
 }
 
 
+namespace LCMPFileIO {
+
+
+void toFile(const std::vector<std::unordered_map<SymbolId, StateId>>& gotoTable, 
+            const SymbolTable& symtab,
+            const std::filesystem::path& path);
+
+void toFile(const std::vector<std::unordered_map<SymbolId, action>>& actionTable,
+            const SymbolTable& symtab,
+            const std::filesystem::path& path);
+}
 
 #endif //LCMP_GRAMMAR_READ_HEADER

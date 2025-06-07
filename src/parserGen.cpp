@@ -505,7 +505,7 @@ ConflictType checkActionConflict(action exist , action new_action) {
 
 /**
  * @brief 生成SLR(1)分析表
- * @return bool 是否成功生成(无不可消解冲突)
+ * @return int 不可消解冲突数量
  */
 int generateSLRTable(
     const std::vector<std::vector<dotProdc>>& states,

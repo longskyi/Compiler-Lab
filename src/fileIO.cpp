@@ -4,7 +4,7 @@
 #include <fstream>
 #include <sstream>
 #include <filesystem>
-
+#include <set>
 
 void readTerminals(SymbolTable& symtable, std::filesystem::path terminalPath) {
     std::ifstream file(terminalPath);
@@ -534,3 +534,92 @@ void to_json(nlohmann::json& j, const ASTbaseContent & obj) {
     {"symtab",obj.symtab}};
 }
 
+
+namespace LCMPFileIO {
+
+
+void toFile(const std::vector<std::unordered_map<SymbolId, StateId>>& gotoTable, 
+            const SymbolTable& symtab,
+            const std::filesystem::path& path) {
+    std::ofstream outFile(path);
+    if (!outFile.is_open()) {
+        std::cerr << "Failed to open file: " << path << std::endl;
+        return;
+    }
+
+    std::set<SymbolId> allSymbols;
+    for (const auto& stateEntries : gotoTable) {
+        for (const auto& [symbolId, _] : stateEntries) {
+            allSymbols.insert(symbolId);
+        }
+    }
+
+    outFile << "State";
+    for (SymbolId symId : allSymbols) {
+        outFile << "\t" << toString_view(symtab[symId].sym());
+    }
+    outFile << "\n";
+
+    for (StateId state(0); state < gotoTable.size(); state = StateId(state + 1)) {
+        outFile << state;
+        
+        std::map<SymbolId, StateId> stateMap(gotoTable[state].begin(), gotoTable[state].end());
+        
+        for (SymbolId symId : allSymbols) {
+            outFile << "\t";
+            if (stateMap.count(symId)) {
+                outFile << stateMap[symId];
+            }
+        }
+        outFile << "\n";
+    }
+
+    outFile.close();
+}
+
+void toFile(const std::vector<std::unordered_map<SymbolId, action>>& actionTable,
+            const SymbolTable& symtab,
+            const std::filesystem::path& path) {
+    std::ofstream outFile(path);
+    if (!outFile.is_open()) {
+        std::cerr << "Failed to open file: " << path << std::endl;
+        return;
+    }
+
+    std::set<SymbolId> allSymbols;
+    for (const auto& stateEntries : actionTable) {
+        for (const auto& [symbolId, _] : stateEntries) {
+            if (symtab[symbolId].is_terminal()) {
+                allSymbols.insert(symbolId);
+            }
+        }
+    }
+
+    outFile << "State";
+    for (SymbolId symId : allSymbols) {
+        outFile << "\t" << toString_view(symtab[symId].sym());
+    }
+    outFile << "\n";
+
+    for (StateId state(0); state < actionTable.size(); state = StateId(state + 1)) {
+        outFile << state;
+        
+        std::map<SymbolId, action> stateMap(actionTable[state].begin(), actionTable[state].end());
+        
+        for (SymbolId symId : allSymbols) {
+            outFile << "\t";
+            if (stateMap.count(symId)) {
+                const auto& act = stateMap[symId];
+                if (std::holds_alternative<StateId>(act)) {
+                    outFile << "s" << std::get<StateId>(act);  // Shift
+                } else {
+                    outFile << "r" << std::get<ProductionId>(act);  // Reduce
+                }
+            }
+        }
+        outFile << "\n";
+    }
+
+    outFile.close();
+}
+}

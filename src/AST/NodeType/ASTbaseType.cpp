@@ -59,6 +59,7 @@ const char* ASTSubTypeToString(ASTSubType subtype) {
         case ASTSubType::FunctionCall: return "FunctionCall";
         case ASTSubType::Return: return "Return";
         case ASTSubType::pType: return "pType";
+        case ASTSubType::StmtPrint: return "StmtPrint";
         default: return "Unknown ASTSubType";
     }
 }

@@ -775,6 +775,28 @@ bool parseBoolIRGenQUIT(AST::ASTBool* Bool_ptr, IRGenVisitor* IRGenerator) {
             bool_val = Operand::allocOperand(Operand::i32, u8"cond");
             cmp.dst = bool_val;
             curr_code.push_back(cmp);
+        } else {
+            BinaryOpInst cmp;
+            cmp.op = BinaryOpInst::cmp;
+            cmp.src1 = left_ctx.expr_addr;
+            cmp.cmp_type = BinaryOpInst::NE;
+            switch (cmp.src1.datatype) {
+                case IR::Operand::i32:
+                    cmp.src2 = Operand::allocIMM(IR::Operand::i32);
+                    break;
+                case IR::Operand::f32:
+                    cmp.src2 = Operand::allocIMM(IR::Operand::f32);
+                    break;
+                case IR::Operand::ptr:
+                    cmp.src2 = Operand::allocIMM(IR::Operand::ptr);
+                    break;
+                default:
+                    std::cerr<<"不支持的比较类型\n";
+                    return false;
+            }
+            bool_val = Operand::allocOperand(Operand::i32, u8"cond");
+            cmp.dst = bool_val;
+            curr_code.push_back(cmp);
         }
         if (!Context[Bool_ptr].BoolTrueLabel.empty() && 
             !Context[Bool_ptr].BoolFalseLabel.empty()) {
